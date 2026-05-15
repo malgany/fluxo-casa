@@ -1,6 +1,6 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { ApiRequest, ApiResponse } from "./types.js";
 
-export default function handler(_request: VercelRequest, response: VercelResponse) {
+export default function handler(_request: ApiRequest, response: ApiResponse) {
   response.status(200).json({
     configured: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
     mode: "vercel-blob-sync-log",

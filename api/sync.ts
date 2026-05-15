@@ -1,6 +1,6 @@
 import { get, list, put } from "@vercel/blob";
-import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { collectionNames, type AnyEntity, type CollectionName, type SyncChanges, type SyncRequest } from "../src/domain/types.js";
+import type { ApiRequest, ApiResponse } from "./types.js";
 
 interface SyncLog {
   id: string;
@@ -12,7 +12,7 @@ interface SyncLog {
 const defaultToken = "fluxo-casa-local";
 const defaultHouseholdId = "casa";
 
-export default async function handler(request: VercelRequest, response: VercelResponse) {
+export default async function handler(request: ApiRequest, response: ApiResponse) {
   if (request.method !== "POST") {
     response.setHeader("Allow", "POST");
     response.status(405).json({ message: "Método não permitido." });
@@ -76,7 +76,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
   });
 }
 
-function isAuthorized(request: VercelRequest): boolean {
+function isAuthorized(request: ApiRequest): boolean {
   const expected = process.env.SYNC_TOKEN || defaultToken;
   const header = request.headers.authorization;
   const actual = Array.isArray(header) ? header[0] : header;
