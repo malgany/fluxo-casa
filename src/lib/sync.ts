@@ -1,5 +1,5 @@
 import { applyRemoteChanges, getClientId, getDirtyChanges, markChangesSynced } from "./db";
-import type { SyncRequest, SyncResponse } from "../domain/types";
+import type { SyncChanges, SyncRequest, SyncResponse } from "../domain/types";
 
 export interface SyncConfig {
   apiUrl: string;
@@ -10,6 +10,12 @@ export interface SyncConfig {
 export interface SyncResult {
   ok: boolean;
   message: string;
+}
+
+interface SyncConflictResponse {
+  serverTime?: string;
+  message?: string;
+  changes?: SyncChanges;
 }
 
 const configKey = "fluxo-casa-sync-config";
@@ -80,6 +86,17 @@ export async function syncNow(): Promise<SyncResult> {
     },
     body: JSON.stringify(request)
   });
+
+  if (response.status === 409) {
+    const conflict = (await response.json().catch(() => ({}))) as SyncConflictResponse;
+    if (conflict.changes) await applyRemoteChanges(conflict.changes);
+    if (conflict.serverTime) saveSyncConfig({ ...config, lastSyncAt: conflict.serverTime });
+
+    return {
+      ok: false,
+      message: conflict.message || "Sincronização adiada. Tente novamente em instantes."
+    };
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: "Sincronização falhou." }));

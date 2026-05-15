@@ -83,6 +83,8 @@ households/<SYNC_HOUSEHOLD_ID>/sync-log/<timestamp>-<device>.json
 
 Cada celular mantem os dados no IndexedDB. Quando sincroniza, envia as mudancas locais e baixa os logs remotos mais recentes. O merge usa `updatedAt` mais recente por registro.
 
+Se dois dispositivos tentarem enviar ao mesmo tempo e um deles ainda nao tiver baixado mudancas remotas recentes, a API responde `409 Conflict`. Nesse caso, o app baixa as mudancas remotas, mantem as mudancas locais pendentes no IndexedDB e tenta enviar novamente na proxima sincronizacao automatica ou manual.
+
 ## Sincronizacao
 
 - Sincroniza ao abrir o app.

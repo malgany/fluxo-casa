@@ -37,9 +37,21 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
   const householdId = safeSegment(process.env.SYNC_HOUSEHOLD_ID || defaultHouseholdId);
   const prefix = `households/${householdId}/sync-log/`;
-  const now = new Date().toISOString();
+  const incomingHasChanges = hasChanges(payload.changes);
+  const conflictReadUntil = new Date().toISOString();
+  const remoteLogs = await readLogs(prefix, payload.since, conflictReadUntil);
 
-  if (hasChanges(payload.changes)) {
+  if (incomingHasChanges && remoteLogs.some((log) => log.clientId !== payload.clientId)) {
+    response.status(409).json({
+      serverTime: conflictReadUntil,
+      message: "Existem mudanças remotas novas. Sincronize novamente antes de enviar suas alterações.",
+      changes: mergeLogs(remoteLogs)
+    });
+    return;
+  }
+
+  if (incomingHasChanges) {
+    const now = new Date().toISOString();
     const log: SyncLog = {
       id: randomId(),
       createdAt: now,
@@ -55,10 +67,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
     });
   }
 
-  const logs = await readLogs(prefix, payload.since);
+  const readUntil = new Date().toISOString();
+  const logs = await readLogs(prefix, payload.since, readUntil);
 
   response.status(200).json({
-    serverTime: new Date().toISOString(),
+    serverTime: readUntil,
     changes: mergeLogs(logs)
   });
 }
@@ -70,7 +83,7 @@ function isAuthorized(request: VercelRequest): boolean {
   return actual?.replace(/^Bearer\s+/i, "").trim() === expected;
 }
 
-async function readLogs(prefix: string, since?: string): Promise<SyncLog[]> {
+async function readLogs(prefix: string, since: string | undefined, until: string): Promise<SyncLog[]> {
   const logs: SyncLog[] = [];
   let cursor: string | undefined;
 
@@ -80,13 +93,14 @@ async function readLogs(prefix: string, since?: string): Promise<SyncLog[]> {
 
     for (const blob of page.blobs) {
       if (since && blob.pathname <= `${prefix}${since}`) continue;
+      if (blob.pathname > `${prefix}${until}`) continue;
 
       const result = await get(blob.pathname, { access: "private", useCache: false });
       if (!result || result.statusCode !== 200) continue;
 
       const text = await new Response(result.stream).text();
       const log = JSON.parse(text) as SyncLog;
-      if (!since || log.createdAt > since) logs.push(log);
+      if ((!since || log.createdAt > since) && log.createdAt <= until) logs.push(log);
     }
   } while (cursor);
 
