@@ -20,6 +20,7 @@ interface SyncConflictResponse {
 
 const configKey = "fluxo-casa-sync-config";
 const defaultToken = import.meta.env.VITE_SYNC_TOKEN || "fluxo-casa-local";
+const legacyDefaultToken = "fluxo-casa-local";
 
 export function getSyncConfig(): SyncConfig {
   const fallback = { apiUrl: defaultApiUrl(), token: defaultToken };
@@ -28,9 +29,10 @@ export function getSyncConfig(): SyncConfig {
 
   try {
     const parsed = JSON.parse(raw) as Partial<SyncConfig>;
+    const parsedToken = parsed.token?.trim();
     return {
       apiUrl: parsed.apiUrl?.trim() || fallback.apiUrl,
-      token: parsed.token?.trim() || fallback.token,
+      token: !parsedToken || parsedToken === legacyDefaultToken ? fallback.token : parsedToken,
       lastSyncAt: parsed.lastSyncAt
     };
   } catch {
@@ -64,8 +66,8 @@ export async function setupServer(config: SyncConfig): Promise<SyncResult> {
 
 export async function syncNow(): Promise<SyncResult> {
   const config = getSyncConfig();
-  if (!config.apiUrl || !config.token) {
-    return { ok: false, message: "Configure o servidor local e o token." };
+  if (!config.token) {
+    return { ok: false, message: "Token de sincronização não configurado." };
   }
 
   const setupResult = await ensureServerReady(config);
