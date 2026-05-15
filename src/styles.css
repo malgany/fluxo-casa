@@ -325,7 +325,7 @@ textarea {
 
 .timeline-row {
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr) auto 34px;
+  grid-template-columns: 42px minmax(0, 1fr) auto 34px;
   gap: 10px;
   align-items: center;
   min-height: 72px;
@@ -341,17 +341,27 @@ textarea {
   opacity: 0.58;
 }
 
-.date-chip {
+.entry-icon {
   display: inline-grid;
-  width: 52px;
-  min-height: 36px;
+  width: 42px;
+  height: 42px;
   place-items: center;
-  border-radius: 999px;
-  padding: 0 8px;
+  overflow: hidden;
+  border-radius: 12px;
   background: var(--surface);
   color: #625b71;
-  font-size: 0.8rem;
+  font-size: 1rem;
   font-weight: 800;
+}
+
+.entry-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.entry-icon.fallback {
+  border: 1px solid var(--outline-variant);
 }
 
 .timeline-text {
@@ -582,6 +592,86 @@ input {
 .segmented button.active.out {
   background: var(--red-container);
   color: var(--red);
+}
+
+.icon-picker {
+  display: grid;
+  gap: 8px;
+  margin-top: -4px;
+}
+
+.selected-icon-chip {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 28px;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  border-radius: 999px;
+  padding: 6px 8px 6px 6px;
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  font-weight: 800;
+}
+
+.selected-icon-chip img,
+.icon-suggestions img {
+  display: block;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+
+.selected-icon-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-icon-chip button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 1.1rem;
+}
+
+.selected-icon-chip button:hover {
+  background: color-mix(in srgb, var(--on-primary-container) 12%, transparent);
+}
+
+.icon-suggestions {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.icon-suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+.icon-suggestions button {
+  display: grid;
+  grid-template-columns: 30px auto;
+  gap: 8px;
+  align-items: center;
+  flex: 0 0 auto;
+  min-height: 42px;
+  border: 1px solid var(--outline-variant);
+  border-radius: 999px;
+  padding: 5px 12px 5px 6px;
+  background: var(--surface-container);
+  color: #1d1b20;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.icon-suggestions button:hover {
+  background: var(--surface-container-high);
 }
 
 .switch-row {

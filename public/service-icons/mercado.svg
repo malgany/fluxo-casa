@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Mercado">
+  <rect width="64" height="64" rx="16" fill="#1b7f4c"/>
+  <path d="M18 25h28l-3 25H21l-3-25Z" fill="#ffffff"/>
+  <path d="M24 25c0-6 4-10 8-10s8 4 8 10" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="27" cy="36" r="3" fill="#1b7f4c"/>
+  <circle cx="37" cy="36" r="3" fill="#1b7f4c"/>
+</svg>

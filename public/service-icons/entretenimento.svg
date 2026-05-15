@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Entretenimento">
+  <rect width="64" height="64" rx="16" fill="#22313f"/>
+  <path d="M18 17h28a5 5 0 0 1 5 5v20a5 5 0 0 1-5 5H18a5 5 0 0 1-5-5V22a5 5 0 0 1 5-5Z" fill="#ffffff"/>
+  <path d="m29 26 12 7-12 7V26Z" fill="#22313f"/>
+  <path d="M18 52h28" stroke="#ffca3a" stroke-width="4" stroke-linecap="round"/>
+</svg>

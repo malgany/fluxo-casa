@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Águas Guariroba">
+  <rect width="64" height="64" rx="16" fill="#e8f6ff"/>
+  <path d="M32 9c8 11 17 21 17 32 0 9-7 16-17 16S15 50 15 41C15 30 24 20 32 9Z" fill="#0074c8"/>
+  <path d="M25 43c4 4 11 4 15 0" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+  <path d="M23 32c6 3 12 3 18 0" fill="none" stroke="#85d8ff" stroke-width="4" stroke-linecap="round"/>
+</svg>

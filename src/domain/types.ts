@@ -15,6 +15,7 @@ export interface SyncEntity {
 export interface Entry extends SyncEntity {
   kind: FlowKind;
   title: string;
+  iconId?: string;
   amount: number;
   date: string;
   recurrenceId?: string;
@@ -23,6 +24,7 @@ export interface Entry extends SyncEntity {
 export interface Recurrence extends SyncEntity {
   kind: FlowKind;
   title: string;
+  iconId?: string;
   amount: number;
   dayOfMonth: number;
   startsOn: string;

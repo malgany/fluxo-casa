@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="OpenAI">
+  <rect width="64" height="64" rx="16" fill="#0f1720"/>
+  <g fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 13l12 7v14"/>
+    <path d="M44 20l7 12-7 12"/>
+    <path d="M51 32l-7 12-12 7"/>
+    <path d="M32 51l-12-7-7-12"/>
+    <path d="M13 32l7-12 12-7"/>
+    <path d="M20 20h14l10 14"/>
+  </g>
+</svg>

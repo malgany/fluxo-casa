@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Energisa">
+  <rect width="64" height="64" rx="16" fill="#0057a8"/>
+  <path d="M35 8 17 36h13l-5 20 22-31H34l1-17Z" fill="#ffd23f"/>
+  <path d="M41 15c6 4 10 10 10 17 0 11-8 20-19 20" fill="none" stroke="#8fd6ff" stroke-width="3" stroke-linecap="round"/>
+</svg>

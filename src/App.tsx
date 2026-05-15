@@ -4,6 +4,7 @@ import { db, createBase, ensureSettings, exportBackup, importBackup, saveRecord,
 import { syncNow } from "./lib/sync";
 import { addMonths, dayLabel, firstDayOfMonth, formatMoney, monthKey, monthLabel, monthName, todayIso, yearLabel } from "./domain/dates";
 import { active, calculateMonth, defaultSettings, type MonthSnapshot } from "./domain/finance";
+import { findIconById, searchIconOptions, type ServiceIcon } from "./domain/iconRegistry";
 import type { AppSettings, Entry, FlowKind, Recurrence } from "./domain/types";
 
 type View = "home" | "timeline";
@@ -278,9 +279,12 @@ function TimelineView({ snapshot, setMonth }: { snapshot: MonthSnapshot; setMont
 function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [kind, setKind] = useState<FlowKind>("out");
   const [title, setTitle] = useState("");
+  const [selectedIconId, setSelectedIconId] = useState<string | undefined>();
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(todayIso());
   const [recurring, setRecurring] = useState(false);
+  const selectedIcon = findIconById(selectedIconId);
+  const iconSuggestions = useMemo(() => searchIconOptions(title, selectedIconId).slice(0, 5), [selectedIconId, title]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -292,6 +296,7 @@ function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
         ...createBase("recurrence"),
         kind,
         title: title.trim(),
+        iconId: selectedIconId,
         amount: value,
         dayOfMonth: Number(date.slice(8, 10)),
         startsOn: date,
@@ -302,6 +307,7 @@ function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
         ...createBase("entry"),
         kind,
         title: title.trim(),
+        iconId: selectedIconId,
         amount: value,
         date
       } as Entry);
@@ -327,6 +333,31 @@ function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
           Título
           <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Salário, farmácia, iFood" autoFocus />
         </label>
+
+        {(selectedIcon || iconSuggestions.length > 0) && (
+          <div className="icon-picker" aria-label="Sugestões de ícone">
+            {selectedIcon && (
+              <div className="selected-icon-chip">
+                <ServiceIconImage icon={selectedIcon} />
+                <span>{selectedIcon.label}</span>
+                <button type="button" onClick={() => setSelectedIconId(undefined)} aria-label="Remover ícone">
+                  ×
+                </button>
+              </div>
+            )}
+            {iconSuggestions.length > 0 && (
+              <div className="icon-suggestions">
+                {iconSuggestions.map((icon) => (
+                  <button key={icon.id} type="button" onClick={() => setSelectedIconId(icon.id)}>
+                    <ServiceIconImage icon={icon} />
+                    <span>{icon.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <label>
           Valor
           <input value={amount} onChange={(event) => setAmount(event.target.value)} type="number" inputMode="decimal" step="0.01" min="0" />
@@ -422,10 +453,10 @@ function SummaryLine({ label, value, strong }: { label: string; value: number; s
 function TimelineRow({ item }: { item: MonthSnapshot["items"][number] }) {
   return (
     <div className={`timeline-row ${item.kind} ${item.future ? "future" : ""}`}>
-      <div className="date-chip">{dayLabel(item.date)}</div>
+      <TimelineIcon item={item} />
       <div className="timeline-text">
         <strong>{item.title}</strong>
-        <span>{item.recurring ? "Recorrente" : item.future ? "Previsto" : "Lançado"}</span>
+        <span>{dayLabel(item.date)} · {item.recurring ? "Recorrente" : item.future ? "Previsto" : "Lançado"}</span>
       </div>
       <div className={item.kind === "in" ? "amount money-in" : "amount money-out"}>
         {item.kind === "in" ? "+" : "-"} {formatMoney(item.amount)}
@@ -440,6 +471,27 @@ function TimelineRow({ item }: { item: MonthSnapshot["items"][number] }) {
       </button>
     </div>
   );
+}
+
+function TimelineIcon({ item }: { item: MonthSnapshot["items"][number] }) {
+  const icon = findIconById(item.iconId);
+  if (icon) {
+    return (
+      <div className="entry-icon">
+        <ServiceIconImage icon={icon} />
+      </div>
+    );
+  }
+
+  return <div className="entry-icon fallback">{initialFor(item.title)}</div>;
+}
+
+function ServiceIconImage({ icon }: { icon: ServiceIcon }) {
+  return <img src={icon.src} alt="" aria-hidden="true" loading="lazy" />;
+}
+
+function initialFor(title: string): string {
+  return title.trim().charAt(0).toLocaleUpperCase("pt-BR") || "?";
 }
 
 export default App;

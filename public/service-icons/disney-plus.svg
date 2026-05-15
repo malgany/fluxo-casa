@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Disney+">
+  <rect width="64" height="64" rx="16" fill="#101a4d"/>
+  <path d="M14 25c9-13 29-15 38-3" fill="none" stroke="#75d6ff" stroke-width="3" stroke-linecap="round"/>
+  <text x="32" y="40" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#ffffff">Disney</text>
+  <path d="M47 43h10M52 38v10" stroke="#75d6ff" stroke-width="3" stroke-linecap="round"/>
+</svg>

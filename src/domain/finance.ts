@@ -21,6 +21,7 @@ export interface TimelineItem {
   recordId: string;
   kind: FlowKind;
   title: string;
+  iconId?: string;
   amount: number;
   date: string;
   future: boolean;
@@ -68,6 +69,7 @@ export function buildMonthItems(data: Pick<FinanceData, "entries" | "recurrences
       recordId: entry.id,
       kind: entry.kind,
       title: entry.title,
+      iconId: entry.iconId,
       amount: entry.amount,
       date: entry.date,
       future: entry.date > today,
@@ -87,6 +89,7 @@ export function buildMonthItems(data: Pick<FinanceData, "entries" | "recurrences
         recordId: rule.id,
         kind: rule.kind,
         title: rule.title,
+        iconId: rule.iconId,
         amount: rule.amount,
         date,
         future: date > today,
