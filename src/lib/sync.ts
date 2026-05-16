@@ -18,6 +18,11 @@ interface SyncConflictResponse {
   changes?: SyncChanges;
 }
 
+type SyncAttemptResult =
+  | { kind: "success"; message: string }
+  | { kind: "conflict"; config: SyncConfig }
+  | { kind: "error"; message: string };
+
 const configKey = "fluxo-casa-sync-config";
 const defaultToken = import.meta.env.VITE_SYNC_TOKEN || "fluxo-casa-local";
 const legacyDefaultToken = "fluxo-casa-local";
@@ -65,7 +70,7 @@ export async function setupServer(config: SyncConfig): Promise<SyncResult> {
 }
 
 export async function syncNow(): Promise<SyncResult> {
-  const config = getSyncConfig();
+  let config = getSyncConfig();
   if (!config.token) {
     return { ok: false, message: "Token de sincronização não configurado." };
   }
@@ -73,6 +78,18 @@ export async function syncNow(): Promise<SyncResult> {
   const setupResult = await ensureServerReady(config);
   if (!setupResult.ok) return setupResult;
 
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const result = await syncOnce(config);
+    if (result.kind === "success") return { ok: true, message: result.message };
+    if (result.kind === "error") return { ok: false, message: result.message };
+
+    config = result.config;
+  }
+
+  return { ok: false, message: "Sincronização ocupada. Tente novamente em instantes." };
+}
+
+async function syncOnce(config: SyncConfig): Promise<SyncAttemptResult> {
   const changes = await getDirtyChanges();
   const request: SyncRequest = {
     clientId: getClientId(),
@@ -92,24 +109,22 @@ export async function syncNow(): Promise<SyncResult> {
   if (response.status === 409) {
     const conflict = (await response.json().catch(() => ({}))) as SyncConflictResponse;
     if (conflict.changes) await applyRemoteChanges(conflict.changes);
-    if (conflict.serverTime) saveSyncConfig({ ...config, lastSyncAt: conflict.serverTime });
+    const nextConfig = conflict.serverTime ? { ...config, lastSyncAt: conflict.serverTime } : config;
+    saveSyncConfig(nextConfig);
 
-    return {
-      ok: false,
-      message: conflict.message || "Sincronização adiada. Tente novamente em instantes."
-    };
+    return { kind: "conflict", config: nextConfig };
   }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: "Sincronização falhou." }));
-    return { ok: false, message: error.message };
+    return { kind: "error", message: error.message };
   }
 
   const payload = (await response.json()) as SyncResponse;
   await applyRemoteChanges(payload.changes);
   await markChangesSynced(changes);
   saveSyncConfig({ ...config, lastSyncAt: payload.serverTime });
-  return { ok: true, message: "Sincronizado." };
+  return { kind: "success", message: "Sincronizado." };
 }
 
 async function ensureServerReady(config: SyncConfig): Promise<SyncResult> {
