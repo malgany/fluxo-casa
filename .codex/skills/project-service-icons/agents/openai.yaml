@@ -1,0 +1,3 @@
+display_name: Project Service Icons
+short_description: Create SVG service icons for this finance app.
+default_prompt: Create a new SVG service icon for this project and wire it into the icon registry.

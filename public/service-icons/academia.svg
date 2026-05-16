@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Academia">
+  <rect width="64" height="64" rx="16" fill="#242424"/>
+  <path d="M14 29h6v6h-6v-6Z" fill="#ffffff"/>
+  <path d="M44 29h6v6h-6v-6Z" fill="#ffffff"/>
+  <path d="M20 23h6v18h-6V23Z" fill="#ffca3a"/>
+  <path d="M38 23h6v18h-6V23Z" fill="#ffca3a"/>
+  <path d="M26 31h12" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+  <path d="M18 17c5-4 11-6 18-5 6 1 10 4 13 9" fill="none" stroke="#6ee7b7" stroke-width="3" stroke-linecap="round"/>
+</svg>

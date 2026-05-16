@@ -2,7 +2,19 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { db, createBase, ensureSettings, exportBackup, importBackup, saveRecord, softDelete } from "./lib/db";
 import { syncNow } from "./lib/sync";
-import { addMonths, dayLabel, firstDayOfMonth, formatMoney, monthKey, monthLabel, monthName, todayIso, yearLabel } from "./domain/dates";
+import {
+  addMonths,
+  dayLabel,
+  firstDayOfMonth,
+  formatMoney,
+  lastDayOfMonth,
+  monthKey,
+  monthLabel,
+  monthName,
+  signedAmount,
+  todayIso,
+  yearLabel
+} from "./domain/dates";
 import { active, calculateMonth, defaultSettings, type MonthSnapshot } from "./domain/finance";
 import { findIconById, searchIconOptions, type ServiceIcon } from "./domain/iconRegistry";
 import type { AppSettings, Entry, FlowKind, Recurrence } from "./domain/types";
@@ -15,6 +27,7 @@ type AppData = {
   recurrences: Recurrence[];
   settings: AppSettings;
 };
+const APP_UPDATE_RELOAD_DELAY_MS = 700;
 
 function App() {
   const [view, setView] = useState<View>("home");
@@ -105,6 +118,21 @@ function App() {
     setMenuOpen(false);
   }
 
+  async function handleCheckUpdates() {
+    setMenuOpen(false);
+    setMessage("Verificando atualizações...");
+
+    const hasUpdate = await checkForAppUpdate();
+
+    if (!hasUpdate) {
+      setMessage("Aplicativo atualizado.");
+      return;
+    }
+
+    setMessage("Atualizando...");
+    window.setTimeout(() => window.location.reload(), APP_UPDATE_RELOAD_DELAY_MS);
+  }
+
   function revealSyncHint(text?: string) {
     if (text) setSyncHint(text);
     setSyncHintVisible(true);
@@ -178,6 +206,9 @@ function App() {
             <button type="button" onClick={handleSync}>
               Sincronizar
             </button>
+            <button type="button" onClick={handleCheckUpdates}>
+              Verificar atualizações
+            </button>
             <button type="button" onClick={handleExport}>
               Exportar backup
             </button>
@@ -225,14 +256,17 @@ function App() {
       </nav>
 
       <button className="fab" type="button" onClick={() => setSheet("entry")} aria-label="Novo lançamento">
-        +
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
       </button>
 
       {sheet === "entry" && (
         <EntrySheet
           onClose={() => setSheet(null)}
-          onSaved={(savedMonth) => {
-            setTimelineMonth(savedMonth);
+          onSaved={() => {
+            setTimelineMonth(monthKey());
+            setView("timeline");
             void runSync(false);
           }}
         />
@@ -263,6 +297,97 @@ function SyncIndicator({
       </span>
     </button>
   );
+}
+
+async function checkForAppUpdate(): Promise<boolean> {
+  const currentAssets = collectDocumentAssets(document);
+  const [remoteAssets, serviceWorkerUpdated] = await Promise.all([
+    fetchLatestDocumentAssets(),
+    updateServiceWorker()
+  ]);
+
+  if (serviceWorkerUpdated) return true;
+  if (!remoteAssets.length) return false;
+
+  return currentAssets.join("|") !== remoteAssets.join("|");
+}
+
+function collectDocumentAssets(source: Document): string[] {
+  return Array.from(source.querySelectorAll<HTMLScriptElement | HTMLLinkElement>("script[src], link[rel='stylesheet'][href]"))
+    .map((element) => {
+      const asset = element instanceof HTMLScriptElement ? element.src : element.href;
+      return normalizeLocalAssetUrl(asset);
+    })
+    .filter(Boolean)
+    .sort();
+}
+
+function normalizeLocalAssetUrl(value: string): string {
+  try {
+    const url = new URL(value, window.location.href);
+    if (url.origin !== window.location.origin) return "";
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return "";
+  }
+}
+
+async function fetchLatestDocumentAssets(): Promise<string[]> {
+  try {
+    const url = new URL("/", window.location.origin);
+    url.searchParams.set("app-update-check", String(Date.now()));
+
+    const response = await fetch(url, {
+      cache: "reload",
+      headers: { "Cache-Control": "no-cache" }
+    });
+    if (!response.ok) return [];
+
+    const html = await response.text();
+    const parsed = new DOMParser().parseFromString(html, "text/html");
+    return collectDocumentAssets(parsed);
+  } catch {
+    return [];
+  }
+}
+
+async function updateServiceWorker(): Promise<boolean> {
+  if (!("serviceWorker" in navigator)) return false;
+
+  try {
+    const registration = (await navigator.serviceWorker.getRegistration()) ?? (await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }));
+    let foundUpdate = false;
+
+    const updateFound = new Promise<boolean>((resolve) => {
+      const timeout = window.setTimeout(() => resolve(false), 1800);
+
+      registration.addEventListener(
+        "updatefound",
+        () => {
+          foundUpdate = true;
+          const worker = registration.installing;
+
+          if (!worker) {
+            window.clearTimeout(timeout);
+            resolve(true);
+            return;
+          }
+
+          worker.addEventListener("statechange", () => {
+            if (worker.state !== "installed" && worker.state !== "activated") return;
+            window.clearTimeout(timeout);
+            resolve(true);
+          });
+        },
+        { once: true }
+      );
+    });
+
+    await registration.update();
+    return foundUpdate || (await updateFound);
+  } catch {
+    return false;
+  }
 }
 
 function SyncIcon({ state }: { state: SyncIndicatorState }) {
@@ -317,8 +442,99 @@ function HomeView({ snapshot }: { snapshot: MonthSnapshot }) {
         <MetricCard label="Livre projetado" value={snapshot.projectedFree} tone="neutral" />
         <MetricCard label="Entradas futuras" value={snapshot.futureIncome} tone="in" />
       </div>
+
+      <ProjectionChart snapshot={snapshot} />
     </section>
   );
+}
+
+function ProjectionChart({ snapshot }: { snapshot: MonthSnapshot }) {
+  const chart = useMemo(() => buildProjectionChart(snapshot), [snapshot]);
+
+  return (
+    <section className="projection-chart" aria-label="Projeção do mês">
+      <div className="projection-chart-header">
+        <div>
+          <span>Projeção do mês</span>
+          <strong>{formatMoney(snapshot.projectedBalance)}</strong>
+        </div>
+        <small>{chart.hasMovements ? `${chart.movementCount} lançamentos` : "Sem lançamentos"}</small>
+      </div>
+
+      <svg className="projection-chart-svg" viewBox="0 0 320 112" role="img" aria-label={`Saldo previsto: ${formatMoney(snapshot.projectedBalance)}`}>
+        <path className="projection-chart-grid" d="M16 26H304M16 60H304M16 94H304" />
+        <path className="projection-chart-area" d={chart.areaPath} />
+        <path className="projection-chart-line" d={chart.linePath} />
+        {chart.todayPoint && (
+          <g className="projection-chart-today" transform={`translate(${chart.todayPoint.x} ${chart.todayPoint.y})`}>
+            <line y1={-64} y2={18} />
+            <circle r="4.2" />
+          </g>
+        )}
+      </svg>
+
+      <div className="projection-chart-footer">
+        <span>{formatMoney(chart.minValue)}</span>
+        <span>{formatMoney(chart.maxValue)}</span>
+      </div>
+    </section>
+  );
+}
+
+function buildProjectionChart(snapshot: MonthSnapshot) {
+  const lastDay = Number(lastDayOfMonth(snapshot.month).slice(8, 10));
+  const today = todayIso();
+  const todayDay = monthKey(today) === snapshot.month ? Number(today.slice(8, 10)) : undefined;
+  const dailyChanges = new Map<number, number>();
+
+  for (const item of snapshot.items) {
+    const day = Number(item.date.slice(8, 10));
+    dailyChanges.set(day, (dailyChanges.get(day) ?? 0) + signedAmount(item.kind, item.amount));
+  }
+
+  let balance = snapshot.openingBalance;
+  const values = Array.from({ length: lastDay }, (_, index) => {
+    const day = index + 1;
+    balance += dailyChanges.get(day) ?? 0;
+    return {
+      day,
+      value: balance
+    };
+  });
+
+  const rawMin = Math.min(snapshot.openingBalance, ...values.map((point) => point.value));
+  const rawMax = Math.max(snapshot.openingBalance, ...values.map((point) => point.value));
+  const range = Math.max(rawMax - rawMin, Math.max(Math.abs(rawMax), 1) * 0.18);
+  const minValue = rawMin - range * 0.16;
+  const maxValue = rawMax + range * 0.16;
+  const chartWidth = 288;
+  const chartHeight = 68;
+  const left = 16;
+  const top = 26;
+  const bottom = top + chartHeight;
+  const valueRange = maxValue - minValue || 1;
+  const points = values.map((point) => {
+    const x = left + ((point.day - 1) / Math.max(lastDay - 1, 1)) * chartWidth;
+    const y = bottom - ((point.value - minValue) / valueRange) * chartHeight;
+    return { ...point, x, y };
+  });
+  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"}${round(point.x)} ${round(point.y)}`).join(" ");
+  const areaPath = `${linePath} L${round(left + chartWidth)} ${bottom} L${left} ${bottom} Z`;
+  const todayPoint = todayDay ? points[todayDay - 1] : undefined;
+
+  return {
+    areaPath,
+    hasMovements: snapshot.items.length > 0,
+    linePath,
+    maxValue: rawMax,
+    minValue: rawMin,
+    movementCount: snapshot.items.length,
+    todayPoint
+  };
+}
+
+function round(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 function TimelineView({
@@ -463,7 +679,7 @@ function MonthPage({
   );
 }
 
-function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: (savedMonth: string) => void }) {
+function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [kind, setKind] = useState<FlowKind>("out");
   const [title, setTitle] = useState("");
   const [selectedIconId, setSelectedIconId] = useState<string | undefined>();
@@ -505,7 +721,7 @@ function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: (saved
     }
 
     onClose();
-    onSaved(monthKey(date));
+    onSaved();
   }
 
   return (

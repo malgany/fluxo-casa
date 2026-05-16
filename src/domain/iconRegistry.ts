@@ -43,6 +43,18 @@ export const serviceIcons = [
     aliases: ["mercado", "supermercado", "compras", "feira", "alimento"]
   },
   {
+    id: "academia",
+    label: "Academia",
+    src: "/service-icons/academia.svg",
+    aliases: ["academia", "gym", "treino", "musculacao", "exercicio", "fitness"]
+  },
+  {
+    id: "farmacia",
+    label: "Farmacia",
+    src: "/service-icons/farmacia.svg",
+    aliases: ["farmacia", "remedio", "medicamento", "saude", "drogaria"]
+  },
+  {
     id: "energisa",
     label: "Energisa",
     src: "/service-icons/energisa.svg",
