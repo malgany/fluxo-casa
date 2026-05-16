@@ -196,7 +196,7 @@ function App() {
 
       <main className="content">
         {view === "home" ? (
-          <HomeView snapshot={homeSnapshot} onOpenTimeline={() => setView("timeline")} />
+          <HomeView snapshot={homeSnapshot} />
         ) : (
           <TimelineView snapshot={timelineSnapshot} setMonth={setTimelineMonth} onChanged={() => void runSync(false)} />
         )}
@@ -283,7 +283,7 @@ function SyncIcon({ state }: { state: SyncIndicatorState }) {
   );
 }
 
-function HomeView({ snapshot, onOpenTimeline }: { snapshot: MonthSnapshot; onOpenTimeline: () => void }) {
+function HomeView({ snapshot }: { snapshot: MonthSnapshot }) {
   return (
     <section className="stack">
       <div className="hero-balance">
@@ -298,14 +298,6 @@ function HomeView({ snapshot, onOpenTimeline }: { snapshot: MonthSnapshot; onOpe
         <MetricCard label="Livre projetado" value={snapshot.projectedFree} tone="neutral" />
         <MetricCard label="Entradas futuras" value={snapshot.futureIncome} tone="in" />
       </div>
-
-      <button className="timeline-preview" type="button" onClick={onOpenTimeline}>
-        <div>
-          <span>Linha do tempo</span>
-          <strong>{snapshot.items.length} lançamentos em {monthLabel(snapshot.month)}</strong>
-        </div>
-        <b>›</b>
-      </button>
     </section>
   );
 }

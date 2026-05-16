@@ -266,8 +266,7 @@ textarea {
 
 .hero-balance span,
 .hero-balance small,
-.metric-card span,
-.timeline-preview span {
+.metric-card span {
   color: #625b71;
   font-weight: 600;
 }
@@ -313,32 +312,11 @@ textarea {
   background: var(--amber-container);
 }
 
-.timeline-preview,
 .balance-summary,
 .timeline-list,
 .month-totals {
   border-radius: 24px;
   background: var(--surface-container);
-}
-
-.timeline-preview {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 86px;
-  padding: 18px;
-  color: inherit;
-  text-align: left;
-}
-
-.timeline-preview strong {
-  display: block;
-  margin-top: 4px;
-}
-
-.timeline-preview b {
-  font-size: 2rem;
-  color: var(--primary);
 }
 
 .month-strip {
