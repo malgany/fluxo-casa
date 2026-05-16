@@ -198,7 +198,7 @@ function App() {
         {view === "home" ? (
           <HomeView snapshot={homeSnapshot} onOpenTimeline={() => setView("timeline")} />
         ) : (
-          <TimelineView snapshot={timelineSnapshot} setMonth={setTimelineMonth} />
+          <TimelineView snapshot={timelineSnapshot} setMonth={setTimelineMonth} onChanged={() => void runSync(false)} />
         )}
       </main>
 
@@ -218,7 +218,7 @@ function App() {
       </button>
 
       {sheet === "entry" && <EntrySheet onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
-      {sheet === "balance" && <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} />}
+      {sheet === "balance" && <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
     </div>
   );
 }
@@ -310,7 +310,15 @@ function HomeView({ snapshot, onOpenTimeline }: { snapshot: MonthSnapshot; onOpe
   );
 }
 
-function TimelineView({ snapshot, setMonth }: { snapshot: MonthSnapshot; setMonth: (month: string) => void }) {
+function TimelineView({
+  snapshot,
+  setMonth,
+  onChanged
+}: {
+  snapshot: MonthSnapshot;
+  setMonth: (month: string) => void;
+  onChanged: () => void;
+}) {
   const touchStart = useRef<number | null>(null);
 
   function onTouchEnd(clientX: number) {
@@ -349,7 +357,7 @@ function TimelineView({ snapshot, setMonth }: { snapshot: MonthSnapshot; setMont
         {snapshot.items.length === 0 ? (
           <div className="empty-state">Nenhum lançamento neste mês.</div>
         ) : (
-          snapshot.items.map((item) => <TimelineRow key={item.id} item={item} />)
+          snapshot.items.map((item) => <TimelineRow key={item.id} item={item} onDeleted={onChanged} />)
         )}
       </div>
 
@@ -478,7 +486,7 @@ function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   );
 }
 
-function BalanceSheet({ settings, onClose }: { settings: AppSettings; onClose: () => void }) {
+function BalanceSheet({ settings, onClose, onSaved }: { settings: AppSettings; onClose: () => void; onSaved: () => void }) {
   const [openingBalance, setOpeningBalance] = useState(String(settings.openingBalance));
   const [openingDate, setOpeningDate] = useState(settings.openingDate || firstDayOfMonth(monthKey()));
 
@@ -490,6 +498,7 @@ function BalanceSheet({ settings, onClose }: { settings: AppSettings; onClose: (
       openingDate
     });
     onClose();
+    onSaved();
   }
 
   return (
@@ -546,7 +555,12 @@ function SummaryLine({ label, value, strong }: { label: string; value: number; s
   );
 }
 
-function TimelineRow({ item }: { item: MonthSnapshot["items"][number] }) {
+function TimelineRow({ item, onDeleted }: { item: MonthSnapshot["items"][number]; onDeleted: () => void }) {
+  async function handleDelete() {
+    await softDelete(item.source === "entry" ? "entries" : "recurrences", item.recordId);
+    onDeleted();
+  }
+
   return (
     <div className={`timeline-row ${item.kind} ${item.future ? "future" : ""}`}>
       <TimelineIcon item={item} />
@@ -560,7 +574,7 @@ function TimelineRow({ item }: { item: MonthSnapshot["items"][number] }) {
       <button
         className="delete-button"
         type="button"
-        onClick={() => softDelete(item.source === "entry" ? "entries" : "recurrences", item.recordId)}
+        onClick={handleDelete}
         aria-label="Excluir"
       >
         ×
