@@ -1,4 +1,5 @@
 import { get, list, put } from "@vercel/blob";
+import { isAuthorized } from "./auth.js";
 import { collectionNames, type AnyEntity, type CollectionName, type SyncChanges, type SyncRequest } from "../src/domain/types.js";
 import type { ApiRequest, ApiResponse } from "./types.js";
 
@@ -9,7 +10,6 @@ interface SyncLog {
   changes: SyncChanges;
 }
 
-const defaultToken = "fluxo-casa-local";
 const defaultHouseholdId = "casa";
 
 export default async function handler(request: ApiRequest, response: ApiResponse) {
@@ -74,13 +74,6 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     serverTime: readUntil,
     changes: mergeLogs(logs)
   });
-}
-
-function isAuthorized(request: ApiRequest): boolean {
-  const expected = process.env.SYNC_TOKEN || defaultToken;
-  const header = request.headers.authorization;
-  const actual = Array.isArray(header) ? header[0] : header;
-  return actual?.replace(/^Bearer\s+/i, "").trim() === expected;
 }
 
 async function readLogs(prefix: string, since: string | undefined, until: string): Promise<SyncLog[]> {

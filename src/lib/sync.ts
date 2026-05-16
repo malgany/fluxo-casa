@@ -1,4 +1,5 @@
 import { applyRemoteChanges, getClientId, getDirtyChanges, markChangesSynced } from "./db";
+import { getStoredAccessPin } from "./access";
 import type { SyncChanges, SyncRequest, SyncResponse } from "../domain/types";
 
 export interface SyncConfig {
@@ -24,11 +25,10 @@ type SyncAttemptResult =
   | { kind: "error"; message: string };
 
 const configKey = "fluxo-casa-sync-config";
-const defaultToken = import.meta.env.VITE_SYNC_TOKEN || "fluxo-casa-local";
 const legacyDefaultToken = "fluxo-casa-local";
 
 export function getSyncConfig(): SyncConfig {
-  const fallback = { apiUrl: defaultApiUrl(), token: defaultToken };
+  const fallback = { apiUrl: defaultApiUrl(), token: getStoredAccessPin() };
   const raw = localStorage.getItem(configKey);
   if (!raw) return fallback;
 
@@ -37,7 +37,7 @@ export function getSyncConfig(): SyncConfig {
     const parsedToken = parsed.token?.trim();
     return {
       apiUrl: parsed.apiUrl?.trim() || fallback.apiUrl,
-      token: !parsedToken || parsedToken === legacyDefaultToken ? fallback.token : parsedToken,
+      token: fallback.token || (!parsedToken || parsedToken === legacyDefaultToken ? "" : parsedToken),
       lastSyncAt: parsed.lastSyncAt
     };
   } catch {

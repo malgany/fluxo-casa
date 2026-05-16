@@ -1,7 +1,8 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { db, createBase, ensureSettings, exportBackup, importBackup, saveRecord, softDelete } from "./lib/db";
+import { db, createBase, ensureSettings, exportBackup, importBackup, saveRecord } from "./lib/db";
 import { syncNow } from "./lib/sync";
+import { clearAccessPin, getStoredAccessPin, verifyAccessPin } from "./lib/access";
 import {
   addMonths,
   dayLabel,
@@ -24,7 +25,8 @@ type Sheet = "entry" | "balance" | null;
 type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
 type ThemeMode = "light" | "dark";
 type MaterialIconName = "wallet" | "sync" | "update" | "export" | "import" | "add";
-type UiIconName = "home" | "list" | "more" | "close" | "delete" | "moon" | "sun";
+type UiIconName = "home" | "list" | "more" | "close" | "delete" | "moon" | "sun" | "lock";
+type AccessState = "checking" | "locked" | "unlocked";
 type AppData = {
   entries: Entry[];
   recurrences: Recurrence[];
@@ -46,11 +48,26 @@ const UI_ICON_PATHS: Record<UiIconName, string[]> = {
   more: ["M12 5h.01", "M12 12h.01", "M12 19h.01"],
   close: ["M18 6 6 18", "M6 6l12 12"],
   delete: ["M4 7h16", "M10 11v6", "M14 11v6", "M6 7l1 13h10l1-13", "M9 7V5h6v2"],
+  lock: ["M7 10V7a5 5 0 0 1 10 0v3", "M6 10h12v10H6z", "M12 14v2"],
   moon: ["M21 14.8A8.5 8.5 0 0 1 9.2 3 7 7 0 1 0 21 14.8Z"],
   sun: ["M12 4V2", "M12 22v-2", "m4.93 4.93-1.42-1.42", "m20.49 20.49-1.42-1.42", "M4 12H2", "M22 12h-2", "m4.93 19.07-1.42 1.42", "m20.49 3.51-1.42 1.42", "M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"]
 };
 
 function App() {
+  const [accessState, setAccessState] = useState<AccessState>(() => (getStoredAccessPin() ? "unlocked" : "locked"));
+
+  function handleLock() {
+    clearAccessPin();
+    setAccessState("locked");
+  }
+
+  if (accessState === "checking") return <AccessGate checking onUnlocked={() => setAccessState("unlocked")} />;
+  if (accessState === "locked") return <AccessGate onUnlocked={() => setAccessState("unlocked")} />;
+
+  return <FinanceApp onLock={handleLock} />;
+}
+
+function FinanceApp({ onLock }: { onLock: () => void }) {
   const [view, setView] = useState<View>("home");
   const currentMonth = monthKey();
   const [timelineMonth, setTimelineMonth] = useState(currentMonth);
@@ -264,7 +281,8 @@ function App() {
 
       <header className="top-app-bar">
         <div className="top-title">
-          <h1>{view === "home" ? "Início" : "Lançamentos"}</h1>
+          <h1>{view === "home" ? "Dashboard" : "Lançamentos"}</h1>
+          <span>{view === "timeline" ? yearLabel(timelineMonth) : monthLabel(currentMonth)}</span>
         </div>
         <div className="app-actions">
           <SyncIndicator state={syncState} hint={syncHint} visible={syncHintVisible} onPress={() => revealSyncHint()} />
@@ -300,6 +318,10 @@ function App() {
               <UiIcon name={theme === "dark" ? "sun" : "moon"} />
               <span>{theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}</span>
             </button>
+            <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); onLock(); }}>
+              <UiIcon name="lock" />
+              <span>Bloquear app</span>
+            </button>
             <div className="menu-divider" role="separator" />
             <button role="menuitem" type="button" onClick={handleExport}>
               <MaterialIcon name="export" className="menu-icon" />
@@ -324,7 +346,6 @@ function App() {
       {message && <div className="snackbar">{message}</div>}
 
       <main className={view === "timeline" ? "content timeline-content" : "content"}>
-        <div className="screen-context">{view === "timeline" ? yearLabel(timelineMonth) : monthLabel(currentMonth)}</div>
         {view === "home" ? (
           <HomeView snapshot={homeSnapshot} />
         ) : (
@@ -337,12 +358,9 @@ function App() {
           <span>
             <UiIcon name="home" />
           </span>
-          Início
+          Dashboard
         </button>
         <button className="nav-action" type="button" onClick={() => setSheet("entry")} aria-label="Novo lançamento">
-          <span>
-            <MaterialIcon name="add" className="nav-action-icon" />
-          </span>
           Novo
         </button>
         <button
@@ -372,6 +390,64 @@ function App() {
       )}
       {sheet === "balance" && <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
     </div>
+  );
+}
+
+function AccessGate({ checking = false, onUnlocked }: { checking?: boolean; onUnlocked: () => void }) {
+  const [pin, setPin] = useState("");
+  const [status, setStatus] = useState(checking ? "Verificando..." : "");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (submitting) return;
+
+    setSubmitting(true);
+    setStatus("");
+
+    try {
+      const result = await verifyAccessPin(pin);
+      if (!result.ok) {
+        setStatus(result.message);
+        return;
+      }
+
+      onUnlocked();
+    } catch {
+      setStatus("Nao foi possivel validar o PIN.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="access-screen">
+      <form className="access-panel" onSubmit={handleSubmit}>
+        <div className="access-mark">
+          <UiIcon name="lock" />
+        </div>
+        <h1>Fluxo Casa</h1>
+        <label>
+          PIN de acesso
+          <input
+            value={pin}
+            onChange={(event) => setPin(event.target.value)}
+            type="password"
+            inputMode="text"
+            pattern="[A-Za-z0-9]+"
+            autoComplete="current-password"
+            autoCapitalize="none"
+            spellCheck={false}
+            autoFocus
+            required
+          />
+        </label>
+        <button className="filled-button" type="submit" disabled={submitting}>
+          {submitting ? "Entrando..." : "Entrar"}
+        </button>
+        {status && <p role="status">{status}</p>}
+      </form>
+    </main>
   );
 }
 
@@ -538,6 +614,14 @@ function MaterialIcon({ name, className }: { name: MaterialIconName; className: 
 }
 
 function UiIcon({ name }: { name: UiIconName }) {
+  if (name === "home") {
+    return (
+      <svg className="ui-icon filled-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M4 10.8 12 3.7l8 7.1V20a1 1 0 0 1-1 1h-4.8v-6.2H9.8V21H5a1 1 0 0 1-1-1v-9.2Z" />
+      </svg>
+    );
+  }
+
   return (
     <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       {UI_ICON_PATHS[name].map((path) => (
@@ -797,12 +881,17 @@ function MonthPage({
       </div>
 
       <div className="timeline-scroll">
-        <div className="timeline-list" role="list" aria-label="Lançamentos do mês">
-          {snapshot.items.length === 0 ? (
-            <div className="empty-state">Nenhum lançamento neste mês.</div>
-          ) : (
-            snapshot.items.map((item) => <TimelineRow key={item.id} item={item} consolidated={consolidated} onDeleted={onChanged} />)
-          )}
+        <div className="timeline-list-section">
+          <div className="timeline-list-header">
+            <h2>Movimentos</h2>
+          </div>
+          <div className="timeline-list" role="list" aria-label="Lançamentos do mês">
+            {snapshot.items.length === 0 ? (
+              <div className="empty-state">Nenhum lançamento neste mês.</div>
+            ) : (
+              snapshot.items.map((item) => <TimelineRow key={item.id} item={item} consolidated={consolidated} />)
+            )}
+          </div>
         </div>
 
         <div className="month-totals">
@@ -1002,18 +1091,11 @@ function SummaryLine({ label, value, strong }: { label: string; value: number; s
 
 function TimelineRow({
   item,
-  consolidated,
-  onDeleted
+  consolidated
 }: {
   item: MonthSnapshot["items"][number];
   consolidated: boolean;
-  onDeleted: () => void;
 }) {
-  async function handleDelete() {
-    await softDelete(item.source === "entry" ? "entries" : "recurrences", item.recordId);
-    onDeleted();
-  }
-
   const status = consolidated && item.future ? "Consolidado" : item.recurring ? "Recorrente" : item.future ? "Previsto" : "Lançado";
 
   return (
@@ -1026,14 +1108,6 @@ function TimelineRow({
       <div className={item.kind === "in" ? "amount money-in" : "amount money-out"}>
         {item.kind === "in" ? "+" : "-"} {formatMoney(item.amount)}
       </div>
-      <button
-        className="delete-button"
-        type="button"
-        onClick={handleDelete}
-        aria-label={`Excluir ${item.title}`}
-      >
-        <UiIcon name="delete" />
-      </button>
     </div>
   );
 }

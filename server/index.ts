@@ -1,10 +1,12 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { createHash } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { collectionNames, type AnyEntity, type CollectionName, type SyncChanges, type SyncRequest } from "../src/domain/types.js";
+
+loadLocalEnvFile();
 
 const port = Number(process.env.FLUXO_API_PORT ?? 3333);
 const host = process.env.FLUXO_API_HOST ?? "::";
@@ -36,18 +38,18 @@ await app.register(cors, { origin: true });
 
 app.get("/api/health", async () => ({
   ok: true,
-  configured: Boolean(getSetting("tokenHash")),
+  configured: isAccessConfigured(),
   dbPath,
   serverTime: new Date().toISOString()
 }));
 
 app.get("/api/status", async () => ({
-  configured: Boolean(getSetting("tokenHash")),
+  configured: isAccessConfigured(),
   serverTime: new Date().toISOString()
 }));
 
 app.post<{ Body: { token?: string } }>("/api/setup", async (request, reply) => {
-  if (getSetting("tokenHash")) {
+  if (isAccessConfigured()) {
     return reply.code(409).send({ message: "Servidor já configurado." });
   }
 
@@ -55,9 +57,28 @@ app.post<{ Body: { token?: string } }>("/api/setup", async (request, reply) => {
   if (!token || token.length < 4) {
     return reply.code(400).send({ message: "Use um token/PIN com pelo menos 4 caracteres." });
   }
+  if (!isPinFormatValid(token)) {
+    return reply.code(400).send({ message: "Use apenas letras e numeros." });
+  }
 
   setSetting("tokenHash", hashToken(token));
   return { configured: true, serverTime: new Date().toISOString() };
+});
+
+app.post<{ Body: { pin?: string } }>("/api/access", async (request, reply) => {
+  const pin = request.body?.pin?.trim();
+  if (!pin) return reply.code(400).send({ message: "Informe o PIN." });
+  if (!isPinFormatValid(pin)) return reply.code(400).send({ message: "Use apenas letras e numeros." });
+
+  if (!getExpectedAccessPin() && !getSetting("tokenHash")) {
+    setSetting("tokenHash", hashToken(pin));
+    return { ok: true, serverTime: new Date().toISOString() };
+  }
+
+  const authError = checkAccessPin(pin);
+  if (authError) return reply.code(authError.status).send({ message: authError.message });
+
+  return { ok: true, serverTime: new Date().toISOString() };
 });
 
 app.post<{ Body: SyncRequest }>("/api/sync", async (request, reply) => {
@@ -95,6 +116,20 @@ app.get("/api/export", async (request, reply) => {
 
 await app.listen({ host, port });
 
+function loadLocalEnvFile(): void {
+  for (const fileName of [".env.local", ".env"]) {
+    const filePath = join(process.cwd(), fileName);
+    if (!existsSync(filePath)) continue;
+
+    for (const line of readFileSync(filePath, "utf8").split(/\r?\n/)) {
+      const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)\s*$/);
+      if (!match || process.env[match[1]] !== undefined) continue;
+
+      process.env[match[1]] = match[2].replace(/^['"]|['"]$/g, "");
+    }
+  }
+}
+
 function getSetting(key: string): string | undefined {
   const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
   return row?.value;
@@ -112,8 +147,35 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function checkAuth(header: string | undefined): { status: number; message: string } | undefined {
+function getExpectedAccessPin(): string | undefined {
+  return process.env.ACCESS_PIN?.trim() || process.env.SYNC_TOKEN?.trim();
+}
+
+function isAccessConfigured(): boolean {
+  return Boolean(getExpectedAccessPin() || getSetting("tokenHash"));
+}
+
+function isPinFormatValid(pin: string): boolean {
+  return /^[a-zA-Z0-9]+$/.test(pin);
+}
+
+function checkAccessPin(pin: string): { status: number; message: string } | undefined {
+  if (!isPinFormatValid(pin)) return { status: 400, message: "Use apenas letras e numeros." };
+
+  const expectedPin = getExpectedAccessPin();
+  if (expectedPin) {
+    return hashToken(pin) === hashToken(expectedPin) ? undefined : { status: 401, message: "PIN invalido." };
+  }
+
   const tokenHash = getSetting("tokenHash");
+  if (!tokenHash) return { status: 428, message: "Servidor ainda nao configurado." };
+
+  return hashToken(pin) === tokenHash ? undefined : { status: 401, message: "PIN invalido." };
+}
+
+function checkAuth(header: string | undefined): { status: number; message: string } | undefined {
+  const expectedPin = getExpectedAccessPin();
+  const tokenHash = expectedPin ? hashToken(expectedPin) : getSetting("tokenHash");
   if (!tokenHash) return { status: 428, message: "Servidor ainda não configurado." };
 
   const token = header?.replace(/^Bearer\s+/i, "").trim();

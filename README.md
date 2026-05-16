@@ -40,14 +40,13 @@ Crie ou conecte um Vercel Blob Store ao projeto e configure as variáveis de amb
 
 ```txt
 BLOB_READ_WRITE_TOKEN=<token-gerado-pela-vercel-blob>
-SYNC_TOKEN=<valor-aleatorio-escolhido-por-voce>
-VITE_SYNC_TOKEN=<mesmo-valor-de-SYNC_TOKEN>
+ACCESS_PIN=<seu-pin-sem-espacos>
 SYNC_HOUSEHOLD_ID=fluxo-casa
 ```
 
-`SYNC_TOKEN` e `VITE_SYNC_TOKEN` precisam ser iguais. Como variáveis `VITE_*` entram no bundle do frontend, isso é uma proteção simples para uso doméstico, não autenticação forte para um app público.
+`ACCESS_PIN` fica apenas no backend. O app pede esse PIN ao abrir, salva uma sessão local por 7 dias e usa o PIN para autorizar a sincronização. Use somente letras e números, sem espaços.
 
-Depois de alterar `VITE_SYNC_TOKEN`, faça um novo deploy para o frontend receber o valor atualizado.
+Depois de alterar `ACCESS_PIN`, faça um novo deploy para a API usar o valor atualizado.
 
 ## Uso Offline
 
