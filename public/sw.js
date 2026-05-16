@@ -1,4 +1,4 @@
-const CACHE_NAME = "fluxo-casa-v3";
+const CACHE_NAME = "fluxo-casa-v5";
 const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -34,7 +34,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(cacheFirst(request));
+  event.respondWith(networkFirstAsset(request));
 });
 
 async function networkFirstNavigation(request) {
@@ -49,20 +49,16 @@ async function networkFirstNavigation(request) {
   }
 }
 
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
+async function networkFirstAsset(request) {
+  const cache = await caches.open(CACHE_NAME);
 
   try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      await cache.put(request, response.clone());
-    }
+    const response = await fetch(new Request(request, { cache: "reload" }));
+    if (response.ok) await cache.put(request, response.clone());
 
     return response;
   } catch {
-    return new Response("", { status: 504, statusText: "Offline" });
+    return (await cache.match(request)) || new Response("", { status: 504, statusText: "Offline" });
   }
 }
 

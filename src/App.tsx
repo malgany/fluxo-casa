@@ -22,14 +22,16 @@ import type { AppSettings, Entry, FlowKind, Recurrence } from "./domain/types";
 type View = "home" | "timeline";
 type Sheet = "entry" | "balance" | null;
 type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
+type ThemeMode = "light" | "dark";
 type MaterialIconName = "wallet" | "sync" | "update" | "export" | "import" | "add";
-type UiIconName = "home" | "list" | "more" | "close" | "delete";
+type UiIconName = "home" | "list" | "more" | "close" | "delete" | "moon" | "sun";
 type AppData = {
   entries: Entry[];
   recurrences: Recurrence[];
   settings: AppSettings;
 };
 const APP_UPDATE_RELOAD_DELAY_MS = 700;
+const THEME_STORAGE_KEY = "fluxo-casa-theme";
 const MATERIAL_ICON_SRC: Record<MaterialIconName, string> = {
   wallet: "/material-symbols/account_balance_wallet.svg",
   sync: "/material-symbols/sync.svg",
@@ -43,7 +45,9 @@ const UI_ICON_PATHS: Record<UiIconName, string[]> = {
   list: ["M8 6h12", "M8 12h12", "M8 18h12", "M4 6h.01", "M4 12h.01", "M4 18h.01"],
   more: ["M12 5h.01", "M12 12h.01", "M12 19h.01"],
   close: ["M18 6 6 18", "M6 6l12 12"],
-  delete: ["M4 7h16", "M10 11v6", "M14 11v6", "M6 7l1 13h10l1-13", "M9 7V5h6v2"]
+  delete: ["M4 7h16", "M10 11v6", "M14 11v6", "M6 7l1 13h10l1-13", "M9 7V5h6v2"],
+  moon: ["M21 14.8A8.5 8.5 0 0 1 9.2 3 7 7 0 1 0 21 14.8Z"],
+  sun: ["M12 4V2", "M12 22v-2", "m4.93 4.93-1.42-1.42", "m20.49 20.49-1.42-1.42", "M4 12H2", "M22 12h-2", "m4.93 19.07-1.42 1.42", "m20.49 3.51-1.42 1.42", "M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"]
 };
 
 function App() {
@@ -52,6 +56,7 @@ function App() {
   const [timelineMonth, setTimelineMonth] = useState(currentMonth);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>(() => readInitialTheme());
   const [message, setMessage] = useState("");
   const [syncState, setSyncState] = useState<SyncIndicatorState>("idle");
   const [syncHint, setSyncHint] = useState("Ainda não sincronizado");
@@ -63,6 +68,28 @@ function App() {
 
   useEffect(() => {
     void ensureSettings();
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !("serviceWorker" in navigator)) return undefined;
+
+    async function clearDevelopmentCaches() {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      }
+    }
+
+    void clearDevelopmentCaches();
   }, []);
 
   useEffect(() => {
@@ -150,6 +177,11 @@ function App() {
 
     setMessage("Atualizando...");
     window.setTimeout(() => window.location.reload(), APP_UPDATE_RELOAD_DELAY_MS);
+  }
+
+  function handleToggleTheme() {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+    setMenuOpen(false);
   }
 
   function revealSyncHint(text?: string) {
@@ -264,6 +296,10 @@ function App() {
               <MaterialIcon name="update" className="menu-icon" />
               <span>Verificar atualizações</span>
             </button>
+            <button role="menuitem" type="button" onClick={handleToggleTheme}>
+              <UiIcon name={theme === "dark" ? "sun" : "moon"} />
+              <span>{theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}</span>
+            </button>
             <div className="menu-divider" role="separator" />
             <button role="menuitem" type="button" onClick={handleExport}>
               <MaterialIcon name="export" className="menu-icon" />
@@ -337,6 +373,13 @@ function App() {
       {sheet === "balance" && <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
     </div>
   );
+}
+
+function readInitialTheme(): ThemeMode {
+  if (typeof window === "undefined") return "light";
+
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return stored === "dark" || stored === "light" ? stored : "light";
 }
 
 function SyncIndicator({
