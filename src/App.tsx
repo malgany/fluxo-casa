@@ -10,6 +10,11 @@ import type { AppSettings, Entry, FlowKind, Recurrence } from "./domain/types";
 type View = "home" | "timeline";
 type Sheet = "entry" | "balance" | null;
 type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
+type AppData = {
+  entries: Entry[];
+  recurrences: Recurrence[];
+  settings: AppSettings;
+};
 
 function App() {
   const [view, setView] = useState<View>("home");
@@ -67,7 +72,6 @@ function App() {
   );
 
   const homeSnapshot = useMemo(() => calculateMonth(data, currentMonth), [data, currentMonth]);
-  const timelineSnapshot = useMemo(() => calculateMonth(data, timelineMonth), [data, timelineMonth]);
 
   useEffect(() => {
     if (!message) return undefined;
@@ -194,11 +198,11 @@ function App() {
 
       {message && <div className="snackbar">{message}</div>}
 
-      <main className="content">
+      <main className={view === "timeline" ? "content timeline-content" : "content"}>
         {view === "home" ? (
           <HomeView snapshot={homeSnapshot} />
         ) : (
-          <TimelineView snapshot={timelineSnapshot} setMonth={setTimelineMonth} onChanged={() => void runSync(false)} />
+          <TimelineView data={data} month={timelineMonth} setMonth={setTimelineMonth} onChanged={() => void runSync(false)} />
         )}
       </main>
 
@@ -318,37 +322,118 @@ function HomeView({ snapshot }: { snapshot: MonthSnapshot }) {
 }
 
 function TimelineView({
-  snapshot,
+  data,
+  month,
   setMonth,
   onChanged
 }: {
-  snapshot: MonthSnapshot;
+  data: AppData;
+  month: string;
   setMonth: (month: string) => void;
   onChanged: () => void;
 }) {
-  const touchStart = useRef<number | null>(null);
+  const [displayMonth, setDisplayMonth] = useState(month);
+  const [motion, setMotion] = useState<"prev" | "next" | null>(null);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const snapshots = useMemo(
+    () => [-1, 0, 1].map((offset) => calculateMonth(data, addMonths(displayMonth, offset))),
+    [data, displayMonth]
+  );
 
-  function onTouchEnd(clientX: number) {
+  useEffect(() => {
+    if (!motion && month !== displayMonth) setDisplayMonth(month);
+  }, [displayMonth, month, motion]);
+
+  function navigate(direction: "prev" | "next") {
+    if (motion) return;
+
+    const targetMonth = addMonths(displayMonth, direction === "next" ? 1 : -1);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setDisplayMonth(targetMonth);
+      setMonth(targetMonth);
+      return;
+    }
+
+    setMotion(direction);
+  }
+
+  function finishMotion() {
+    if (!motion) return;
+    const targetMonth = addMonths(displayMonth, motion === "next" ? 1 : -1);
+    setMotion(null);
+    setDisplayMonth(targetMonth);
+    setMonth(targetMonth);
+  }
+
+  function onTouchEnd(clientX: number, clientY: number) {
     if (touchStart.current == null) return;
-    const diff = clientX - touchStart.current;
-    if (Math.abs(diff) > 56) setMonth(addMonths(snapshot.month, diff < 0 ? 1 : -1));
+    const diffX = clientX - touchStart.current.x;
+    const diffY = clientY - touchStart.current.y;
+    if (Math.abs(diffX) > 56 && Math.abs(diffX) > Math.abs(diffY) * 1.35) {
+      navigate(diffX < 0 ? "next" : "prev");
+    }
     touchStart.current = null;
   }
 
   return (
     <section
-      className="stack"
+      className="timeline-stack"
       onTouchStart={(event) => {
-        touchStart.current = event.touches[0]?.clientX ?? null;
+        const touch = event.touches[0];
+        touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
       }}
-      onTouchEnd={(event) => onTouchEnd(event.changedTouches[0]?.clientX ?? 0)}
+      onTouchEnd={(event) => {
+        const touch = event.changedTouches[0];
+        onTouchEnd(touch?.clientX ?? 0, touch?.clientY ?? 0);
+      }}
     >
+      <div className="timeline-pages-clip">
+        <div
+          className={motion ? `timeline-pages sliding-${motion}` : "timeline-pages"}
+          onAnimationEnd={(event) => {
+            if (event.currentTarget === event.target) finishMotion();
+          }}
+        >
+          {snapshots.map((snapshot, index) => (
+            <MonthPage
+              key={snapshot.month}
+              snapshot={snapshot}
+              onPrevious={() => navigate("prev")}
+              onNext={() => navigate("next")}
+              onChanged={onChanged}
+              disabled={Boolean(motion)}
+              visible={index === 1}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MonthPage({
+  snapshot,
+  onPrevious,
+  onNext,
+  onChanged,
+  disabled,
+  visible
+}: {
+  snapshot: MonthSnapshot;
+  onPrevious: () => void;
+  onNext: () => void;
+  onChanged: () => void;
+  disabled: boolean;
+  visible: boolean;
+}) {
+  return (
+    <div className="month-page" aria-hidden={!visible} data-visible={visible ? "true" : "false"}>
       <div className="month-strip">
-        <button type="button" onClick={() => setMonth(addMonths(snapshot.month, -1))}>
+        <button type="button" onClick={onPrevious} disabled={disabled} tabIndex={visible ? undefined : -1}>
           {monthName(addMonths(snapshot.month, -1))}
         </button>
         <strong>{monthName(snapshot.month)}</strong>
-        <button type="button" onClick={() => setMonth(addMonths(snapshot.month, 1))}>
+        <button type="button" onClick={onNext} disabled={disabled} tabIndex={visible ? undefined : -1}>
           {monthName(addMonths(snapshot.month, 1))}
         </button>
       </div>
@@ -360,19 +445,21 @@ function TimelineView({
         <SummaryLine label="Saldo previsto" value={snapshot.projectedBalance} strong />
       </div>
 
-      <div className="timeline-list">
-        {snapshot.items.length === 0 ? (
-          <div className="empty-state">Nenhum lançamento neste mês.</div>
-        ) : (
-          snapshot.items.map((item) => <TimelineRow key={item.id} item={item} onDeleted={onChanged} />)
-        )}
-      </div>
+      <div className="timeline-scroll">
+        <div className="timeline-list">
+          {snapshot.items.length === 0 ? (
+            <div className="empty-state">Nenhum lançamento neste mês.</div>
+          ) : (
+            snapshot.items.map((item) => <TimelineRow key={item.id} item={item} onDeleted={onChanged} />)
+          )}
+        </div>
 
-      <div className="month-totals">
-        <span>Entradas: <b className="money-in">{formatMoney(snapshot.monthIncome)}</b></span>
-        <span>Saídas: <b className="money-out">{formatMoney(snapshot.monthExpenses)}</b></span>
+        <div className="month-totals">
+          <span>Entradas: <b className="money-in">{formatMoney(snapshot.monthIncome)}</b></span>
+          <span>Saídas: <b className="money-out">{formatMoney(snapshot.monthExpenses)}</b></span>
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
