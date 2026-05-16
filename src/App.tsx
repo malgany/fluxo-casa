@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { db, createBase, ensureSettings, exportBackup, importBackup, saveRecord, softDelete } from "./lib/db";
 import { syncNow } from "./lib/sync";
 import {
@@ -22,12 +22,29 @@ import type { AppSettings, Entry, FlowKind, Recurrence } from "./domain/types";
 type View = "home" | "timeline";
 type Sheet = "entry" | "balance" | null;
 type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
+type MaterialIconName = "wallet" | "sync" | "update" | "export" | "import" | "add";
+type UiIconName = "home" | "list" | "more" | "close" | "delete";
 type AppData = {
   entries: Entry[];
   recurrences: Recurrence[];
   settings: AppSettings;
 };
 const APP_UPDATE_RELOAD_DELAY_MS = 700;
+const MATERIAL_ICON_SRC: Record<MaterialIconName, string> = {
+  wallet: "/material-symbols/account_balance_wallet.svg",
+  sync: "/material-symbols/sync.svg",
+  update: "/material-symbols/update.svg",
+  export: "/material-symbols/file_download.svg",
+  import: "/material-symbols/file_upload.svg",
+  add: "/material-symbols/add.svg"
+};
+const UI_ICON_PATHS: Record<UiIconName, string[]> = {
+  home: ["M3.5 10.5 12 3l8.5 7.5", "M5.5 10v10h13V10", "M9.5 20v-6h5v6"],
+  list: ["M8 6h12", "M8 12h12", "M8 18h12", "M4 6h.01", "M4 12h.01", "M4 18h.01"],
+  more: ["M12 5h.01", "M12 12h.01", "M12 19h.01"],
+  close: ["M18 6 6 18", "M6 6l12 12"],
+  delete: ["M4 7h16", "M10 11v6", "M14 11v6", "M6 7l1 13h10l1-13", "M9 7V5h6v2"]
+};
 
 function App() {
   const [view, setView] = useState<View>("home");
@@ -103,6 +120,8 @@ function App() {
   useEffect(() => {
     if (!menuOpen) return undefined;
 
+    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+
     function closeMenu(event: PointerEvent) {
       const target = event.target as Node;
       if (menuRef.current?.contains(target) || menuButtonRef.current?.contains(target)) return;
@@ -177,6 +196,31 @@ function App() {
     setMenuOpen(false);
   }
 
+  function handleOverflowMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+    if (!items.length) return;
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+      return;
+    }
+
+    const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+    const lastIndex = items.length - 1;
+    let nextIndex = currentIndex;
+
+    if (event.key === "ArrowDown") nextIndex = currentIndex >= lastIndex ? 0 : currentIndex + 1;
+    else if (event.key === "ArrowUp") nextIndex = currentIndex <= 0 ? lastIndex : currentIndex - 1;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = lastIndex;
+    else return;
+
+    event.preventDefault();
+    items[nextIndex]?.focus();
+  }
+
   return (
     <div className="phone-shell">
       <div className="orientation-guard" aria-hidden="true">
@@ -188,32 +232,46 @@ function App() {
 
       <header className="top-app-bar">
         <div className="top-title">
-          <span className="eyebrow">{view === "timeline" ? yearLabel(timelineMonth) : monthLabel(currentMonth)}</span>
           <h1>{view === "home" ? "Início" : "Lançamentos"}</h1>
         </div>
         <div className="app-actions">
           <SyncIndicator state={syncState} hint={syncHint} visible={syncHintVisible} onPress={() => revealSyncHint()} />
-          <button ref={menuButtonRef} className="icon-button" type="button" onClick={() => setMenuOpen((current) => !current)} aria-label="Menu">
-            ⋮
+          <button
+            ref={menuButtonRef}
+            className="icon-button"
+            type="button"
+            onClick={() => setMenuOpen((current) => !current)}
+            aria-label="Menu"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-controls={menuOpen ? "main-overflow-menu" : undefined}
+          >
+            <UiIcon name="more" />
           </button>
         </div>
 
         {menuOpen && (
-          <div ref={menuRef} className="overflow-menu">
-            <button type="button" onClick={() => { setSheet("balance"); setMenuOpen(false); }}>
-              Ajustar saldo inicial
+          <div id="main-overflow-menu" ref={menuRef} className="overflow-menu" role="menu" aria-label="Menu de ações" onKeyDown={handleOverflowMenuKeyDown}>
+            <button role="menuitem" type="button" onClick={() => { setSheet("balance"); setMenuOpen(false); }}>
+              <MaterialIcon name="wallet" className="menu-icon" />
+              <span>Ajustar saldo inicial</span>
             </button>
-            <button type="button" onClick={handleSync}>
-              Sincronizar
+            <button role="menuitem" type="button" onClick={handleSync}>
+              <MaterialIcon name="sync" className="menu-icon" />
+              <span>Sincronizar</span>
             </button>
-            <button type="button" onClick={handleCheckUpdates}>
-              Verificar atualizações
+            <button role="menuitem" type="button" onClick={handleCheckUpdates}>
+              <MaterialIcon name="update" className="menu-icon" />
+              <span>Verificar atualizações</span>
             </button>
-            <button type="button" onClick={handleExport}>
-              Exportar backup
+            <div className="menu-divider" role="separator" />
+            <button role="menuitem" type="button" onClick={handleExport}>
+              <MaterialIcon name="export" className="menu-icon" />
+              <span>Exportar backup</span>
             </button>
-            <button type="button" onClick={() => fileInputRef.current?.click()}>
-              Importar backup
+            <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); fileInputRef.current?.click(); }}>
+              <MaterialIcon name="import" className="menu-icon" />
+              <span>Importar backup</span>
             </button>
           </div>
         )}
@@ -230,6 +288,7 @@ function App() {
       {message && <div className="snackbar">{message}</div>}
 
       <main className={view === "timeline" ? "content timeline-content" : "content"}>
+        <div className="screen-context">{view === "timeline" ? yearLabel(timelineMonth) : monthLabel(currentMonth)}</div>
         {view === "home" ? (
           <HomeView snapshot={homeSnapshot} />
         ) : (
@@ -239,8 +298,16 @@ function App() {
 
       <nav className="bottom-nav" aria-label="Navegação inferior">
         <button className={view === "home" ? "active" : ""} type="button" onClick={() => setView("home")}>
-          <span>⌂</span>
+          <span>
+            <UiIcon name="home" />
+          </span>
           Início
+        </button>
+        <button className="nav-action" type="button" onClick={() => setSheet("entry")} aria-label="Novo lançamento">
+          <span>
+            <MaterialIcon name="add" className="nav-action-icon" />
+          </span>
+          Novo
         </button>
         <button
           className={view === "timeline" ? "active" : ""}
@@ -250,16 +317,12 @@ function App() {
             setView("timeline");
           }}
         >
-          <span>≡</span>
+          <span>
+            <UiIcon name="list" />
+          </span>
           Lançamentos
         </button>
       </nav>
-
-      <button className="fab" type="button" onClick={() => setSheet("entry")} aria-label="Novo lançamento">
-        <svg aria-hidden="true" viewBox="0 0 24 24">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-      </button>
 
       {sheet === "entry" && (
         <EntrySheet
@@ -427,14 +490,28 @@ function SyncIcon({ state }: { state: SyncIndicatorState }) {
   );
 }
 
+function MaterialIcon({ name, className }: { name: MaterialIconName; className: string }) {
+  return <span className={className} style={{ "--material-icon-src": `url("${MATERIAL_ICON_SRC[name]}")` } as CSSProperties} aria-hidden="true" />;
+}
+
+function UiIcon({ name }: { name: UiIconName }) {
+  return (
+    <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      {UI_ICON_PATHS[name].map((path) => (
+        <path key={path} d={path} />
+      ))}
+    </svg>
+  );
+}
+
 function HomeView({ snapshot }: { snapshot: MonthSnapshot }) {
   return (
     <section className="stack">
-      <div className="hero-balance">
-        <span>Saldo hoje</span>
+      <article className="hero-balance" aria-label="Saldo do mês">
+        <span>Saldo</span>
         <strong>{formatMoney(snapshot.currentBalance)}</strong>
         <small>Saldo final previsto: {formatMoney(snapshot.projectedBalance)}</small>
-      </div>
+      </article>
 
       <div className="card-grid">
         <MetricCard label="Recebido no mês" value={snapshot.receivedInMonth} tone="in" />
@@ -677,7 +754,7 @@ function MonthPage({
       </div>
 
       <div className="timeline-scroll">
-        <div className="timeline-list">
+        <div className="timeline-list" role="list" aria-label="Lançamentos do mês">
           {snapshot.items.length === 0 ? (
             <div className="empty-state">Nenhum lançamento neste mês.</div>
           ) : (
@@ -853,7 +930,7 @@ function BottomSheet({ title, children, onClose }: { title: string; children: Re
         <header>
           <h2>{title}</h2>
           <button className="icon-button" type="button" onClick={onClose} aria-label="Fechar">
-            ×
+            <UiIcon name="close" />
           </button>
         </header>
         {children}
@@ -864,7 +941,7 @@ function BottomSheet({ title, children, onClose }: { title: string; children: Re
 
 function MetricCard({ label, value, tone }: { label: string; value: number; tone: "in" | "out" | "warning" | "neutral" | "info" }) {
   return (
-    <article className={`metric-card ${tone}`}>
+    <article className={`metric-card ${tone}`} aria-label={`${label}: ${formatMoney(value)}`}>
       <span>{label}</span>
       <strong>{formatMoney(value)}</strong>
     </article>
@@ -897,7 +974,7 @@ function TimelineRow({
   const status = consolidated && item.future ? "Consolidado" : item.recurring ? "Recorrente" : item.future ? "Previsto" : "Lançado";
 
   return (
-    <div className={`timeline-row ${item.kind} ${item.future && !consolidated ? "future" : ""}`}>
+    <div className={`timeline-row ${item.kind} ${item.future && !consolidated ? "future" : ""}`} role="listitem">
       <TimelineIcon item={item} />
       <div className="timeline-text">
         <strong>{item.title}</strong>
@@ -910,9 +987,9 @@ function TimelineRow({
         className="delete-button"
         type="button"
         onClick={handleDelete}
-        aria-label="Excluir"
+        aria-label={`Excluir ${item.title}`}
       >
-        ×
+        <UiIcon name="delete" />
       </button>
     </div>
   );
