@@ -207,7 +207,14 @@ function App() {
           <span>⌂</span>
           Início
         </button>
-        <button className={view === "timeline" ? "active" : ""} type="button" onClick={() => setView("timeline")}>
+        <button
+          className={view === "timeline" ? "active" : ""}
+          type="button"
+          onClick={() => {
+            setTimelineMonth(currentMonth);
+            setView("timeline");
+          }}
+        >
           <span>≡</span>
           Lançamentos
         </button>
@@ -217,7 +224,15 @@ function App() {
         +
       </button>
 
-      {sheet === "entry" && <EntrySheet onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
+      {sheet === "entry" && (
+        <EntrySheet
+          onClose={() => setSheet(null)}
+          onSaved={(savedMonth) => {
+            setTimelineMonth(savedMonth);
+            void runSync(false);
+          }}
+        />
+      )}
       {sheet === "balance" && <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
     </div>
   );
@@ -361,7 +376,7 @@ function TimelineView({
   );
 }
 
-function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: (savedMonth: string) => void }) {
   const [kind, setKind] = useState<FlowKind>("out");
   const [title, setTitle] = useState("");
   const [selectedIconId, setSelectedIconId] = useState<string | undefined>();
@@ -403,7 +418,7 @@ function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
     }
 
     onClose();
-    onSaved();
+    onSaved(monthKey(date));
   }
 
   return (
