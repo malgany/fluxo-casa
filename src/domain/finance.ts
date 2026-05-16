@@ -35,6 +35,7 @@ export interface MonthSnapshot {
   currentBalance: number;
   projectedBalance: number;
   committed: number;
+  receivedInMonth: number;
   spentInMonth: number;
   projectedFree: number;
   futureIncome: number;
@@ -150,6 +151,9 @@ export function calculateMonth(data: FinanceData, month: string, today = todayIs
     currentBalance: balanceUntil(data, currentCutoff),
     projectedBalance: balanceUntil(data, lastDay),
     committed: futureExpenses,
+    receivedInMonth: items
+      .filter((item) => item.kind === "in" && item.date <= currentCutoff)
+      .reduce((sum, item) => sum + item.amount, 0),
     spentInMonth: items
       .filter((item) => item.kind === "out" && item.date <= currentCutoff)
       .reduce((sum, item) => sum + item.amount, 0),

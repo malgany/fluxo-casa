@@ -15,6 +15,7 @@
   --outline-variant: #cac4d0;
   --green: #1b7f4c;
   --green-container: #c9efdc;
+  --blue-container: #d6e3ff;
   --red: #ba1a1a;
   --red-container: #ffdad6;
   --amber-container: #ffdea8;
@@ -276,6 +277,7 @@ textarea {
 
 .timeline-content {
   overflow: hidden;
+  padding-bottom: 16px;
 }
 
 .stack {
@@ -332,6 +334,10 @@ textarea {
 
 .metric-card.in {
   background: var(--green-container);
+}
+
+.metric-card.info {
+  background: var(--blue-container);
 }
 
 .metric-card.out {
@@ -508,12 +514,13 @@ textarea {
 
 .timeline-scroll {
   display: grid;
-  align-content: start;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
   gap: 16px;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
-  padding-bottom: 84px;
+  padding-bottom: 0;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -534,12 +541,20 @@ textarea {
   justify-content: space-between;
   gap: 12px;
   min-height: 34px;
+  font-size: 1rem;
   color: #625b71;
+}
+
+.summary-line span {
+  font-weight: 500;
 }
 
 .summary-line b {
   overflow-wrap: anywhere;
   color: #1d1b20;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .summary-line.strong {
@@ -550,9 +565,82 @@ textarea {
   font-size: 1.1rem;
 }
 
+.consolidated-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 42px;
+  color: #625b71;
+  font-size: 1rem;
+}
+
+.consolidated-toggle span {
+  font-weight: 500;
+}
+
+.consolidated-toggle input {
+  position: relative;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 28px;
+  min-height: 0;
+  margin: 0;
+  border: 2px solid #79747e;
+  border-radius: 999px;
+  padding: 0;
+  appearance: none;
+  background: var(--surface-container-high);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.consolidated-toggle input::before {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #79747e;
+  content: "";
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.consolidated-toggle input:checked {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.consolidated-toggle input:checked::before {
+  background: var(--on-primary);
+  transform: translateX(20px);
+}
+
+.consolidated-toggle input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 36%, transparent);
+  outline-offset: 2px;
+}
+
 .timeline-list {
+  align-self: start;
   display: grid;
-  overflow: hidden;
+  align-content: start;
+  width: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.timeline-list::-webkit-scrollbar {
+  display: none;
 }
 
 .timeline-row {
@@ -656,9 +744,27 @@ textarea {
 }
 
 .month-totals {
-  display: grid;
-  gap: 8px;
-  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  font-size: 1rem;
+  padding: 16px 88px 16px 16px;
+}
+
+.month-totals span {
+  color: #625b71;
+  font-weight: 500;
+}
+
+.month-totals b {
+  overflow-wrap: anywhere;
+  color: #1d1b20;
+  text-align: right;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .bottom-nav {

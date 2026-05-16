@@ -431,16 +431,16 @@ function HomeView({ snapshot }: { snapshot: MonthSnapshot }) {
   return (
     <section className="stack">
       <div className="hero-balance">
-        <span>Saldo atual</span>
+        <span>Saldo hoje</span>
         <strong>{formatMoney(snapshot.currentBalance)}</strong>
-        <small>Saldo previsto: {formatMoney(snapshot.projectedBalance)}</small>
+        <small>Saldo final previsto: {formatMoney(snapshot.projectedBalance)}</small>
       </div>
 
       <div className="card-grid">
-        <MetricCard label="Comprometido" value={snapshot.committed} tone="warning" />
-        <MetricCard label="Gasto no mês" value={snapshot.spentInMonth} tone="out" />
-        <MetricCard label="Livre projetado" value={snapshot.projectedFree} tone="neutral" />
-        <MetricCard label="Entradas futuras" value={snapshot.futureIncome} tone="in" />
+        <MetricCard label="Recebido no mês" value={snapshot.receivedInMonth} tone="in" />
+        <MetricCard label="Pago no mês" value={snapshot.spentInMonth} tone="out" />
+        <MetricCard label="A receber" value={snapshot.futureIncome} tone="info" />
+        <MetricCard label="A pagar" value={snapshot.futureExpenses} tone="warning" />
       </div>
 
       <ProjectionChart snapshot={snapshot} />
@@ -550,6 +550,7 @@ function TimelineView({
 }) {
   const [displayMonth, setDisplayMonth] = useState(month);
   const [motion, setMotion] = useState<"prev" | "next" | null>(null);
+  const [consolidated, setConsolidated] = useState(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const snapshots = useMemo(
     () => [-1, 0, 1].map((offset) => calculateMonth(data, addMonths(displayMonth, offset))),
@@ -619,6 +620,8 @@ function TimelineView({
               onChanged={onChanged}
               disabled={Boolean(motion)}
               visible={index === 1}
+              consolidated={consolidated}
+              onConsolidatedChange={setConsolidated}
             />
           ))}
         </div>
@@ -633,7 +636,9 @@ function MonthPage({
   onNext,
   onChanged,
   disabled,
-  visible
+  visible,
+  consolidated,
+  onConsolidatedChange
 }: {
   snapshot: MonthSnapshot;
   onPrevious: () => void;
@@ -641,7 +646,11 @@ function MonthPage({
   onChanged: () => void;
   disabled: boolean;
   visible: boolean;
+  consolidated: boolean;
+  onConsolidatedChange: (consolidated: boolean) => void;
 }) {
+  const finalBalance = consolidated ? snapshot.projectedBalance : snapshot.currentBalance;
+
   return (
     <div className="month-page" aria-hidden={!visible} data-visible={visible ? "true" : "false"}>
       <div className="month-strip">
@@ -656,9 +665,15 @@ function MonthPage({
 
       <div className="balance-summary">
         <SummaryLine label="Saldo inicial" value={snapshot.openingBalance} />
-        <SummaryLine label="Saldo atual" value={snapshot.currentBalance} />
-        <SummaryLine label="Gastos previstos" value={snapshot.futureExpenses} />
-        <SummaryLine label="Saldo previsto" value={snapshot.projectedBalance} strong />
+        <label className="consolidated-toggle">
+          <span>Consolidado</span>
+          <input
+            type="checkbox"
+            checked={consolidated}
+            onChange={(event) => onConsolidatedChange(event.target.checked)}
+            tabIndex={visible ? undefined : -1}
+          />
+        </label>
       </div>
 
       <div className="timeline-scroll">
@@ -666,13 +681,13 @@ function MonthPage({
           {snapshot.items.length === 0 ? (
             <div className="empty-state">Nenhum lançamento neste mês.</div>
           ) : (
-            snapshot.items.map((item) => <TimelineRow key={item.id} item={item} onDeleted={onChanged} />)
+            snapshot.items.map((item) => <TimelineRow key={item.id} item={item} consolidated={consolidated} onDeleted={onChanged} />)
           )}
         </div>
 
         <div className="month-totals">
-          <span>Entradas: <b className="money-in">{formatMoney(snapshot.monthIncome)}</b></span>
-          <span>Saídas: <b className="money-out">{formatMoney(snapshot.monthExpenses)}</b></span>
+          <span>Saldo final</span>
+          <b>{formatMoney(finalBalance)}</b>
         </div>
       </div>
     </div>
@@ -847,7 +862,7 @@ function BottomSheet({ title, children, onClose }: { title: string; children: Re
   );
 }
 
-function MetricCard({ label, value, tone }: { label: string; value: number; tone: "in" | "out" | "warning" | "neutral" }) {
+function MetricCard({ label, value, tone }: { label: string; value: number; tone: "in" | "out" | "warning" | "neutral" | "info" }) {
   return (
     <article className={`metric-card ${tone}`}>
       <span>{label}</span>
@@ -865,18 +880,28 @@ function SummaryLine({ label, value, strong }: { label: string; value: number; s
   );
 }
 
-function TimelineRow({ item, onDeleted }: { item: MonthSnapshot["items"][number]; onDeleted: () => void }) {
+function TimelineRow({
+  item,
+  consolidated,
+  onDeleted
+}: {
+  item: MonthSnapshot["items"][number];
+  consolidated: boolean;
+  onDeleted: () => void;
+}) {
   async function handleDelete() {
     await softDelete(item.source === "entry" ? "entries" : "recurrences", item.recordId);
     onDeleted();
   }
 
+  const status = consolidated && item.future ? "Consolidado" : item.recurring ? "Recorrente" : item.future ? "Previsto" : "Lançado";
+
   return (
-    <div className={`timeline-row ${item.kind} ${item.future ? "future" : ""}`}>
+    <div className={`timeline-row ${item.kind} ${item.future && !consolidated ? "future" : ""}`}>
       <TimelineIcon item={item} />
       <div className="timeline-text">
         <strong>{item.title}</strong>
-        <span>{dayLabel(item.date)} · {item.recurring ? "Recorrente" : item.future ? "Previsto" : "Lançado"}</span>
+        <span>{dayLabel(item.date)} · {status}</span>
       </div>
       <div className={item.kind === "in" ? "amount money-in" : "amount money-out"}>
         {item.kind === "in" ? "+" : "-"} {formatMoney(item.amount)}

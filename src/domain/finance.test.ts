@@ -27,11 +27,25 @@ describe("calculateMonth", () => {
   it("calculates current balance, committed spending and projected free balance", () => {
     const entries: Entry[] = [
       {
+        ...base("entry_salary"),
+        kind: "in",
+        title: "Salário",
+        amount: 3000,
+        date: "2026-05-02"
+      },
+      {
         ...base("entry_market"),
         kind: "out",
         title: "Mercado",
         amount: 1000,
         date: "2026-05-05"
+      },
+      {
+        ...base("entry_bonus"),
+        kind: "in",
+        title: "Bônus",
+        amount: 500,
+        date: "2026-05-18"
       },
       {
         ...base("entry_rent"),
@@ -45,11 +59,13 @@ describe("calculateMonth", () => {
     const snapshot = calculateMonth(data({ entries }), "2026-05", "2026-05-15");
 
     expect(snapshot.openingBalance).toBe(10000);
-    expect(snapshot.currentBalance).toBe(9000);
+    expect(snapshot.currentBalance).toBe(12000);
     expect(snapshot.committed).toBe(2000);
+    expect(snapshot.receivedInMonth).toBe(3000);
     expect(snapshot.spentInMonth).toBe(1000);
-    expect(snapshot.projectedFree).toBe(7000);
-    expect(snapshot.projectedBalance).toBe(7000);
+    expect(snapshot.futureIncome).toBe(500);
+    expect(snapshot.projectedFree).toBe(10500);
+    expect(snapshot.projectedBalance).toBe(10500);
   });
 
   it("projects monthly recurring values into future months", () => {
