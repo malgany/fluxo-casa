@@ -9,6 +9,7 @@ import type { AppSettings, Entry, FlowKind, Recurrence } from "./domain/types";
 
 type View = "home" | "timeline";
 type Sheet = "entry" | "balance" | null;
+type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
 
 function App() {
   const [view, setView] = useState<View>("home");
@@ -17,6 +18,9 @@ function App() {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [message, setMessage] = useState("");
+  const [syncState, setSyncState] = useState<SyncIndicatorState>("idle");
+  const [syncHint, setSyncHint] = useState("Ainda não sincronizado");
+  const [syncHintVisible, setSyncHintVisible] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,6 +77,13 @@ function App() {
   }, [message]);
 
   useEffect(() => {
+    if (!syncHintVisible) return undefined;
+
+    const timer = window.setTimeout(() => setSyncHintVisible(false), 2200);
+    return () => window.clearTimeout(timer);
+  }, [syncHintVisible, syncHint]);
+
+  useEffect(() => {
     if (!menuOpen) return undefined;
 
     function closeMenu(event: PointerEvent) {
@@ -90,13 +101,26 @@ function App() {
     setMenuOpen(false);
   }
 
-  async function runSync(showMessage: boolean) {
-    if (syncingRef.current) return;
+  function revealSyncHint(text?: string) {
+    if (text) setSyncHint(text);
+    setSyncHintVisible(true);
+  }
+
+  async function runSync(showHint: boolean) {
+    if (syncingRef.current) {
+      if (showHint) revealSyncHint("Atualizando...");
+      return;
+    }
     syncingRef.current = true;
+    setSyncState("syncing");
+    setSyncHint("Atualizando...");
+    if (showHint) setSyncHintVisible(true);
 
     try {
       const result = await syncNow();
-      if (showMessage || result.ok) setMessage(result.message);
+      setSyncState(result.ok ? "synced" : "error");
+      setSyncHint(result.ok ? "Sincronizado" : result.message);
+      if (showHint || !result.ok) setSyncHintVisible(true);
     } finally {
       syncingRef.current = false;
     }
@@ -136,6 +160,7 @@ function App() {
           <h1>{view === "home" ? "Início" : "Lançamentos"}</h1>
         </div>
         <div className="app-actions">
+          <SyncIndicator state={syncState} hint={syncHint} visible={syncHintVisible} onPress={() => revealSyncHint()} />
           <button ref={menuButtonRef} className="icon-button" type="button" onClick={() => setMenuOpen((current) => !current)} aria-label="Menu">
             ⋮
           </button>
@@ -195,6 +220,66 @@ function App() {
       {sheet === "entry" && <EntrySheet onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
       {sheet === "balance" && <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} />}
     </div>
+  );
+}
+
+function SyncIndicator({
+  state,
+  hint,
+  visible,
+  onPress
+}: {
+  state: SyncIndicatorState;
+  hint: string;
+  visible: boolean;
+  onPress: () => void;
+}) {
+  const label = state === "syncing" ? "Atualizando..." : hint;
+
+  return (
+    <button className={`sync-indicator ${state}`} type="button" onClick={onPress} aria-label={label} title={label}>
+      <SyncIcon state={state} />
+      <span className={visible ? "sync-tooltip visible" : "sync-tooltip"} role="status">
+        {label}
+      </span>
+    </button>
+  );
+}
+
+function SyncIcon({ state }: { state: SyncIndicatorState }) {
+  if (state === "syncing") {
+    return (
+      <svg className="sync-svg spinner" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" />
+        <path d="M20 12a8 8 0 0 0-8-8" />
+      </svg>
+    );
+  }
+
+  if (state === "error") {
+    return (
+      <svg className="sync-svg" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 7v6" />
+        <path d="M12 16.5v.5" />
+      </svg>
+    );
+  }
+
+  if (state === "synced") {
+    return (
+      <svg className="sync-svg" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" />
+        <path d="m8.5 12.2 2.2 2.2 4.8-5" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className="sync-svg" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8" />
+      <path d="M8 12h8" />
+    </svg>
   );
 }
 
@@ -284,18 +369,22 @@ function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   const [date, setDate] = useState(todayIso());
   const [recurring, setRecurring] = useState(false);
   const selectedIcon = findIconById(selectedIconId);
-  const iconSuggestions = useMemo(() => searchIconOptions(title, selectedIconId).slice(0, 5), [selectedIconId, title]);
+  const iconSuggestions = useMemo(
+    () => (selectedIcon ? [] : searchIconOptions(title, selectedIconId).slice(0, 5)),
+    [selectedIcon, selectedIconId, title]
+  );
+  const effectiveTitle = selectedIcon?.label ?? title.trim();
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const value = Number(amount);
-    if (!title.trim() || !value) return;
+    if (!effectiveTitle || !value || !date) return;
 
     if (recurring) {
       await saveRecord("recurrences", {
         ...createBase("recurrence"),
         kind,
-        title: title.trim(),
+        title: effectiveTitle,
         iconId: selectedIconId,
         amount: value,
         dayOfMonth: Number(date.slice(8, 10)),
@@ -306,7 +395,7 @@ function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
       await saveRecord("entries", {
         ...createBase("entry"),
         kind,
-        title: title.trim(),
+        title: effectiveTitle,
         iconId: selectedIconId,
         amount: value,
         date
@@ -331,7 +420,14 @@ function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
 
         <label>
           Título
-          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Salário, farmácia, iFood" autoFocus />
+          <input
+            value={selectedIcon ? "" : title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder={selectedIcon ? `${selectedIcon.label} selecionado` : "Salário, farmácia, iFood"}
+            disabled={Boolean(selectedIcon)}
+            required={!selectedIcon}
+            autoFocus
+          />
         </label>
 
         {(selectedIcon || iconSuggestions.length > 0) && (
@@ -360,11 +456,11 @@ function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
 
         <label>
           Valor
-          <input value={amount} onChange={(event) => setAmount(event.target.value)} type="number" inputMode="decimal" step="0.01" min="0" />
+          <input value={amount} onChange={(event) => setAmount(event.target.value)} type="number" inputMode="decimal" step="0.01" min="0.01" required />
         </label>
         <label>
           Data
-          <input value={date} onChange={(event) => setDate(event.target.value)} type="date" />
+          <input value={date} onChange={(event) => setDate(event.target.value)} type="date" required />
         </label>
         <label className="switch-row">
           <span>

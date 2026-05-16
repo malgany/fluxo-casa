@@ -137,6 +137,87 @@ textarea {
   background: var(--surface-container-high);
 }
 
+.sync-indicator {
+  position: relative;
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 999px;
+  background: transparent;
+  color: #625b71;
+}
+
+.sync-indicator:hover,
+.sync-indicator:focus-visible {
+  background: var(--surface-container-high);
+}
+
+.sync-indicator.synced {
+  color: var(--green);
+}
+
+.sync-indicator.syncing {
+  color: var(--primary);
+}
+
+.sync-indicator.error {
+  color: var(--red);
+}
+
+.sync-svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+}
+
+.sync-svg.spinner {
+  animation: sync-spin 0.9s linear infinite;
+}
+
+.sync-svg.spinner circle {
+  opacity: 0.25;
+}
+
+.sync-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: -46px;
+  z-index: 25;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 32px));
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #322f35;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.sync-indicator:hover .sync-tooltip,
+.sync-indicator:focus-visible .sync-tooltip,
+.sync-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes sync-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .overflow-menu {
   position: absolute;
   top: calc(66px + env(safe-area-inset-top));
@@ -565,6 +646,16 @@ input {
   padding: 0 14px;
   background: transparent;
   color: #1d1b20;
+}
+
+input:disabled {
+  border-color: var(--outline-variant);
+  background: var(--surface-container);
+  color: #625b71;
+}
+
+input:invalid {
+  border-color: var(--red);
 }
 
 .segmented {
