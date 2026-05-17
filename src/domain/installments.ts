@@ -7,9 +7,12 @@ export interface InstallmentPlanItem {
   title: string;
 }
 
+export const MIN_INSTALLMENT_COUNT = 2;
+export const MAX_INSTALLMENT_COUNT = 36;
+
 export function parseInstallmentCount(value: string): number {
   const count = Number(value);
-  if (!Number.isInteger(count) || count < 2 || count > 120) return 0;
+  if (!Number.isInteger(count) || count < MIN_INSTALLMENT_COUNT || count > MAX_INSTALLMENT_COUNT) return 0;
   return count;
 }
 
@@ -24,7 +27,7 @@ export function buildInstallmentPlan({
   title: string;
   totalCents: number;
 }): InstallmentPlanItem[] {
-  if (!firstDate || !title || totalCents < installments || installments < 2) return [];
+  if (!firstDate || !title || totalCents < installments || installments < MIN_INSTALLMENT_COUNT || installments > MAX_INSTALLMENT_COUNT) return [];
 
   const day = Number(firstDate.slice(8, 10));
   const baseCents = Math.floor(totalCents / installments);

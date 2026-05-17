@@ -32,6 +32,7 @@ describe("installments", () => {
   it("validates installment count and builds a readable preview", () => {
     expect(parseInstallmentCount("1")).toBe(0);
     expect(parseInstallmentCount("10")).toBe(10);
+    expect(parseInstallmentCount("37")).toBe(0);
     expect(buildInstallmentPreview(100000, 10).replace(/\s/g, " ")).toBe("10x de R$ 100,00");
   });
 });

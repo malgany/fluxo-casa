@@ -1,6 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import { createId, nowIso } from "../domain/dates";
-import { defaultSettings } from "../domain/finance";
+import { defaultSettings, settingsIdForHousehold } from "../domain/finance";
 import {
   collectionNames,
   type AnyEntity,
@@ -8,6 +8,9 @@ import {
   type CollectionMap,
   type CollectionName,
   type Entry,
+  type Household,
+  type HouseholdInvitation,
+  type HouseholdMember,
   type Recurrence,
   type SyncChanges,
   type SyncEntity
@@ -17,6 +20,9 @@ class FlowDatabase extends Dexie {
   entries!: Table<Entry, string>;
   recurrences!: Table<Recurrence, string>;
   settings!: Table<AppSettings, string>;
+  households!: Table<Household, string>;
+  householdMembers!: Table<HouseholdMember, string>;
+  householdInvitations!: Table<HouseholdInvitation, string>;
 
   constructor() {
     super("fluxo-casa");
@@ -24,6 +30,14 @@ class FlowDatabase extends Dexie {
       entries: "id, date, updatedAt, deletedAt, syncStatus, kind, recurrenceId",
       recurrences: "id, startsOn, updatedAt, deletedAt, syncStatus, kind, active",
       settings: "id, updatedAt, deletedAt, syncStatus"
+    });
+    this.version(2).stores({
+      entries: "id, householdId, [householdId+date], date, updatedAt, deletedAt, syncStatus, kind, recurrenceId",
+      recurrences: "id, householdId, [householdId+startsOn], startsOn, updatedAt, deletedAt, syncStatus, kind, active",
+      settings: "id, householdId, updatedAt, deletedAt, syncStatus",
+      households: "id, updatedAt, deletedAt, syncStatus",
+      householdMembers: "id, householdId, userId, role, updatedAt, deletedAt, syncStatus",
+      householdInvitations: "id, householdId, email, status, updatedAt, deletedAt, syncStatus"
     });
   }
 }
@@ -53,13 +67,14 @@ export function createBase(prefix: string): SyncEntity {
   };
 }
 
-export async function ensureSettings(): Promise<AppSettings> {
-  const existing = await db.settings.get("settings_app");
+export async function ensureSettings(householdId: string): Promise<AppSettings> {
+  const existing = await db.settings.get(settingsIdForHousehold(householdId));
   if (existing) return existing;
 
-  const settings = defaultSettings();
-  await db.settings.put(settings);
-  return settings;
+  const settings = defaultSettings(householdId);
+  const fallback = { ...settings, syncStatus: "synced" as const };
+  await db.settings.put(fallback);
+  return fallback;
 }
 
 export async function saveRecord<K extends CollectionName>(collection: K, record: CollectionMap[K]): Promise<void> {
@@ -88,10 +103,12 @@ export async function softDelete<K extends CollectionName>(collection: K, id: st
   } as CollectionMap[K]);
 }
 
-export async function getDirtyChanges(): Promise<SyncChanges> {
+export async function getDirtyChanges(householdId: string): Promise<SyncChanges> {
   const changes: SyncChanges = {};
   for (const collection of collectionNames) {
-    const rows = await tableFor(collection).where("syncStatus").anyOf(["dirty", "deleted"]).toArray();
+    const rows = (await tableFor(collection).where("syncStatus").anyOf(["dirty", "deleted"]).toArray()).filter(
+      (row) => row.householdId === householdId
+    );
     if (rows.length > 0) changes[collection] = rows as never;
   }
   return changes;
@@ -131,16 +148,16 @@ export async function applyRemoteChanges(changes: SyncChanges): Promise<void> {
   );
 }
 
-export async function exportBackup(): Promise<{ exportedAt: string; changes: SyncChanges }> {
+export async function exportBackup(householdId: string): Promise<{ exportedAt: string; changes: SyncChanges }> {
   const changes: SyncChanges = {};
   for (const collection of collectionNames) {
-    changes[collection] = (await tableFor(collection).toArray()).map(stripLocalStatus) as never;
+    changes[collection] = (await tableFor(collection).where("householdId").equals(householdId).toArray()).map(stripLocalStatus) as never;
   }
   return { exportedAt: nowIso(), changes };
 }
 
-export async function importBackup(payload: { changes?: SyncChanges }): Promise<void> {
-  if (!payload.changes) throw new Error("Backup inválido.");
+export async function importBackup(payload: { changes?: SyncChanges }, householdId: string): Promise<void> {
+  if (!payload.changes) throw new Error("Backup invalido.");
 
   await db.transaction(
     "rw",
@@ -149,7 +166,7 @@ export async function importBackup(payload: { changes?: SyncChanges }): Promise<
       for (const collection of collectionNames) {
         const table = tableFor(collection);
         for (const item of payload.changes?.[collection] ?? []) {
-          await table.put({ ...item, syncStatus: "dirty" } as never);
+          await table.put({ ...item, householdId, syncStatus: "dirty" } as never);
         }
       }
     }

@@ -1,27 +1,46 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db, getDirtyChanges, saveRecord } from "./db";
-import { saveSyncConfig, syncNow } from "./sync";
+import { syncNow } from "./sync";
 import type { Entry } from "../domain/types";
+
+const { supabaseMock, upserts } = vi.hoisted(() => ({
+  upserts: [] as Array<{ table: string; rows: unknown[] }>,
+  supabaseMock: {
+    auth: {
+      getSession: vi.fn()
+    },
+    from: vi.fn()
+  }
+}));
+
+vi.mock("./supabase", () => ({
+  getSupabaseClient: () => supabaseMock
+}));
 
 const localEntry: Entry = {
   id: "entry_local",
+  householdId: "household_1",
   kind: "out",
-  title: "Água",
+  title: "Agua",
   amount: 120,
   date: "2026-05-15",
   createdAt: "2026-05-15T10:00:00.000Z",
   updatedAt: "2026-05-15T10:00:00.000Z"
 };
 
-const remoteEntry: Entry = {
+const remoteEntryRow = {
   id: "entry_remote",
+  household_id: "household_1",
   kind: "out",
   title: "Mercado",
+  icon_id: null,
   amount: 200,
   date: "2026-05-15",
-  createdAt: "2026-05-15T10:01:00.000Z",
-  updatedAt: "2026-05-15T10:01:00.000Z"
+  recurrence_id: null,
+  created_at: "2026-05-15T10:01:00.000Z",
+  updated_at: "2026-05-15T10:01:00.000Z",
+  deleted_at: null
 };
 
 describe("syncNow", () => {
@@ -30,53 +49,44 @@ describe("syncNow", () => {
     await db.open();
     vi.restoreAllMocks();
     vi.stubGlobal("localStorage", createMemoryStorage());
+    upserts.length = 0;
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: { access_token: "token" } } });
+    supabaseMock.from.mockImplementation((table: string) => createTableMock(table));
   });
 
-  it("applies remote changes and retries local push after conflict", async () => {
-    saveSyncConfig({
-      apiUrl: "",
-      token: "test-token",
-      lastSyncAt: "2026-05-15T10:00:00.000Z"
-    });
+  it("pulls remote changes and pushes only the selected household", async () => {
     await saveRecord("entries", localEntry);
+    await saveRecord("entries", { ...localEntry, id: "entry_other", householdId: "household_2" });
 
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      if (!init) {
-        return jsonResponse({ configured: true });
-      }
-
-      if (fetchMock.mock.calls.length === 2) {
-        return jsonResponse(
-          {
-            serverTime: "2026-05-15T10:02:00.000Z",
-            changes: { entries: [remoteEntry] }
-          },
-          409
-        );
-      }
-
-      return jsonResponse({
-        serverTime: "2026-05-15T10:03:00.000Z",
-        changes: {}
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await syncNow();
+    const result = await syncNow("household_1");
 
     expect(result).toEqual({ ok: true, message: "Sincronizado." });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(await db.entries.get(remoteEntry.id)).toMatchObject({ title: "Mercado", syncStatus: "synced" });
-    expect(await db.entries.get(localEntry.id)).toMatchObject({ title: "Água", syncStatus: "synced" });
-    expect((await getDirtyChanges()).entries ?? []).toHaveLength(0);
+    expect(await db.entries.get(remoteEntryRow.id)).toMatchObject({ title: "Mercado", householdId: "household_1", syncStatus: "synced" });
+    expect(await db.entries.get(localEntry.id)).toMatchObject({ title: "Agua", syncStatus: "synced" });
+    expect((await getDirtyChanges("household_1")).entries ?? []).toHaveLength(0);
+    expect((await getDirtyChanges("household_2")).entries ?? []).toHaveLength(1);
+    expect(upserts.find((item) => item.table === "entries")?.rows).toHaveLength(1);
   });
 });
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" }
-  });
+function createTableMock(table: string) {
+  return {
+    select: () => createSelectQuery(table),
+    upsert: (rows: unknown[]) => {
+      upserts.push({ table, rows });
+      return Promise.resolve({ data: rows, error: null });
+    }
+  };
+}
+
+function createSelectQuery(table: string) {
+  const data = table === "entries" ? [remoteEntryRow] : [];
+  const result = Promise.resolve({ data, error: null });
+  return {
+    eq: () => createSelectQuery(table),
+    gt: () => createSelectQuery(table),
+    then: result.then.bind(result)
+  };
 }
 
 function createMemoryStorage(): Storage {

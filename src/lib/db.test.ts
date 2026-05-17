@@ -5,6 +5,7 @@ import type { Entry } from "../domain/types";
 
 const entry: Entry = {
   id: "entry_test",
+  householdId: "household_1",
   kind: "out",
   title: "Farmácia",
   amount: 80,
@@ -21,13 +22,23 @@ describe("IndexedDB sync state", () => {
 
   it("saves dirty entries and clears dirty state after push", async () => {
     await saveRecord("entries", entry);
-    const dirty = await getDirtyChanges();
+    const dirty = await getDirtyChanges("household_1");
 
     expect(dirty.entries).toHaveLength(1);
     expect(dirty.entries?.[0].syncStatus).toBe("dirty");
 
     await markChangesSynced(dirty);
-    expect((await getDirtyChanges()).entries ?? []).toHaveLength(0);
+    expect((await getDirtyChanges("household_1")).entries ?? []).toHaveLength(0);
+  });
+
+  it("does not mix dirty records from other households", async () => {
+    await saveRecord("entries", entry);
+    await saveRecord("entries", { ...entry, id: "entry_other", householdId: "household_2" });
+
+    const dirty = await getDirtyChanges("household_1");
+
+    expect(dirty.entries).toHaveLength(1);
+    expect(dirty.entries?.[0].householdId).toBe("household_1");
   });
 
   it("keeps newer local dirty data over older remote data", async () => {

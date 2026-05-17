@@ -50,10 +50,15 @@ export function active<T extends { deletedAt?: string }>(item: T): boolean {
   return !item.deletedAt;
 }
 
-export function defaultSettings(today = todayIso()): AppSettings {
+export function settingsIdForHousehold(householdId: string): string {
+  return `settings_${householdId}`;
+}
+
+export function defaultSettings(householdId = "local", today = todayIso()): AppSettings {
   const now = new Date().toISOString();
   return {
-    id: "settings_app",
+    id: settingsIdForHousehold(householdId),
+    householdId,
     openingBalance: 0,
     openingDate: firstDayOfMonth(monthKey(today)),
     createdAt: now,

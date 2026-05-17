@@ -5,7 +5,7 @@ import type { AppSettings, Entry, Recurrence } from "./types";
 const createdAt = "2026-05-01T00:00:00.000Z";
 
 function base(id: string) {
-  return { id, createdAt, updatedAt: createdAt };
+  return { id, householdId: "household_1", createdAt, updatedAt: createdAt };
 }
 
 const settings: AppSettings = {

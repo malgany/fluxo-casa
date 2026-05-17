@@ -1,142 +1,219 @@
-import { applyRemoteChanges, getClientId, getDirtyChanges, markChangesSynced } from "./db";
-import { getStoredAccessPin } from "./access";
-import type { SyncChanges, SyncRequest, SyncResponse } from "../domain/types";
-
-export interface SyncConfig {
-  apiUrl: string;
-  token: string;
-  lastSyncAt?: string;
-}
+import { applyRemoteChanges, getDirtyChanges, markChangesSynced } from "./db";
+import { getSupabaseClient } from "./supabase";
+import type { AppSettings, Entry, Recurrence, SyncChanges } from "../domain/types";
 
 export interface SyncResult {
   ok: boolean;
   message: string;
 }
 
-interface SyncConflictResponse {
-  serverTime?: string;
-  message?: string;
-  changes?: SyncChanges;
+interface EntryRow {
+  id: string;
+  household_id: string;
+  kind: Entry["kind"];
+  title: string;
+  icon_id: string | null;
+  amount: number;
+  date: string;
+  recurrence_id: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
 }
 
-type SyncAttemptResult =
-  | { kind: "success"; message: string }
-  | { kind: "conflict"; config: SyncConfig }
-  | { kind: "error"; message: string };
+interface RecurrenceRow {
+  id: string;
+  household_id: string;
+  kind: Recurrence["kind"];
+  title: string;
+  icon_id: string | null;
+  amount: number;
+  day_of_month: number;
+  starts_on: string;
+  ends_on: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
 
-const configKey = "fluxo-casa-sync-config";
-const legacyDefaultToken = "fluxo-casa-local";
+interface SettingsRow {
+  id: string;
+  household_id: string;
+  opening_balance: number;
+  opening_date: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
 
-export function getSyncConfig(): SyncConfig {
-  const fallback = { apiUrl: defaultApiUrl(), token: getStoredAccessPin() };
-  const raw = localStorage.getItem(configKey);
-  if (!raw) return fallback;
+const syncKeyPrefix = "fluxo-casa-supabase-sync-at";
+
+export async function syncNow(householdId: string): Promise<SyncResult> {
+  if (!householdId) return { ok: false, message: "Casa nao selecionada." };
 
   try {
-    const parsed = JSON.parse(raw) as Partial<SyncConfig>;
-    const parsedToken = parsed.token?.trim();
-    return {
-      apiUrl: parsed.apiUrl?.trim() || fallback.apiUrl,
-      token: fallback.token || (!parsedToken || parsedToken === legacyDefaultToken ? "" : parsedToken),
-      lastSyncAt: parsed.lastSyncAt
-    };
-  } catch {
-    return fallback;
+    const supabase = getSupabaseClient();
+    const {
+      data: { session }
+    } = await supabase.auth.getSession();
+    if (!session) return { ok: false, message: "Sessao expirada. Entre novamente." };
+
+    const pulled = await pullRemoteChanges(householdId);
+    await applyRemoteChanges(pulled);
+
+    const dirty = await getDirtyChanges(householdId);
+    await pushLocalChanges(dirty);
+    await markChangesSynced(dirty);
+
+    setLastSyncAt(householdId, new Date().toISOString());
+    return { ok: true, message: "Sincronizado." };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : "Sincronizacao falhou." };
   }
 }
 
-function defaultApiUrl(): string {
-  return "";
-}
+async function pullRemoteChanges(householdId: string): Promise<SyncChanges> {
+  const supabase = getSupabaseClient();
 
-export function saveSyncConfig(config: SyncConfig): void {
-  localStorage.setItem(configKey, JSON.stringify(config));
-}
+  const entriesQuery = supabase.from("entries").select("*").eq("household_id", householdId);
+  const recurrencesQuery = supabase.from("recurrences").select("*").eq("household_id", householdId);
+  const settingsQuery = supabase.from("household_settings").select("*").eq("household_id", householdId);
 
-export async function setupServer(config: SyncConfig): Promise<SyncResult> {
-  const response = await fetch(`${config.apiUrl}/api/setup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token: config.token })
-  });
+  const [entries, recurrences, settings] = await Promise.all([entriesQuery, recurrencesQuery, settingsQuery]);
+  if (entries.error) throw entries.error;
+  if (recurrences.error) throw recurrences.error;
+  if (settings.error) throw settings.error;
 
-  if (!response.ok && response.status !== 409) {
-    const error = await response.json().catch(() => ({ message: "Não foi possível configurar o servidor." }));
-    return { ok: false, message: error.message };
-  }
-
-  saveSyncConfig(config);
-  return { ok: true, message: response.status === 409 ? "Servidor já configurado." : "Servidor configurado." };
-}
-
-export async function syncNow(): Promise<SyncResult> {
-  let config = getSyncConfig();
-  if (!config.token) {
-    return { ok: false, message: "Token de sincronização não configurado." };
-  }
-
-  const setupResult = await ensureServerReady(config);
-  if (!setupResult.ok) return setupResult;
-
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const result = await syncOnce(config);
-    if (result.kind === "success") return { ok: true, message: result.message };
-    if (result.kind === "error") return { ok: false, message: result.message };
-
-    config = result.config;
-  }
-
-  return { ok: false, message: "Sincronização ocupada. Tente novamente em instantes." };
-}
-
-async function syncOnce(config: SyncConfig): Promise<SyncAttemptResult> {
-  const changes = await getDirtyChanges();
-  const request: SyncRequest = {
-    clientId: getClientId(),
-    since: config.lastSyncAt,
-    changes
+  return {
+    entries: ((entries.data ?? []) as EntryRow[]).map(entryFromRow),
+    recurrences: ((recurrences.data ?? []) as RecurrenceRow[]).map(recurrenceFromRow),
+    settings: ((settings.data ?? []) as SettingsRow[]).map(settingsFromRow)
   };
-
-  const response = await fetch(`${config.apiUrl}/api/sync`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.token}`
-    },
-    body: JSON.stringify(request)
-  });
-
-  if (response.status === 409) {
-    const conflict = (await response.json().catch(() => ({}))) as SyncConflictResponse;
-    if (conflict.changes) await applyRemoteChanges(conflict.changes);
-    const nextConfig = conflict.serverTime ? { ...config, lastSyncAt: conflict.serverTime } : config;
-    saveSyncConfig(nextConfig);
-
-    return { kind: "conflict", config: nextConfig };
-  }
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: "Sincronização falhou." }));
-    return { kind: "error", message: error.message };
-  }
-
-  const payload = (await response.json()) as SyncResponse;
-  await applyRemoteChanges(payload.changes);
-  await markChangesSynced(changes);
-  saveSyncConfig({ ...config, lastSyncAt: payload.serverTime });
-  return { kind: "success", message: "Sincronizado." };
 }
 
-async function ensureServerReady(config: SyncConfig): Promise<SyncResult> {
-  try {
-    const statusResponse = await fetch(`${config.apiUrl}/api/status`);
-    if (!statusResponse.ok) return { ok: false, message: "Servidor local indisponível." };
+async function pushLocalChanges(changes: SyncChanges): Promise<void> {
+  const supabase = getSupabaseClient();
+  const tasks: Promise<unknown>[] = [];
 
-    const status = (await statusResponse.json()) as { configured?: boolean };
-    if (status.configured) return { ok: true, message: "Servidor pronto." };
-
-    return setupServer(config);
-  } catch {
-    return { ok: false, message: "Servidor local indisponível." };
+  if (changes.entries?.length) {
+    tasks.push(check(supabase.from("entries").upsert(changes.entries.map(entryToRow), { onConflict: "id" })));
   }
+  if (changes.recurrences?.length) {
+    tasks.push(check(supabase.from("recurrences").upsert(changes.recurrences.map(recurrenceToRow), { onConflict: "id" })));
+  }
+  if (changes.settings?.length) {
+    tasks.push(check(supabase.from("household_settings").upsert(changes.settings.map(settingsToRow), { onConflict: "id" })));
+  }
+
+  await Promise.all(tasks);
+}
+
+async function check<T>(request: PromiseLike<{ error: Error | null; data: T }>): Promise<T> {
+  const result = await request;
+  if (result.error) throw result.error;
+  return result.data;
+}
+
+function getLastSyncAt(householdId: string): string | undefined {
+  return localStorage.getItem(`${syncKeyPrefix}:${householdId}`) ?? undefined;
+}
+
+function setLastSyncAt(householdId: string, value: string): void {
+  localStorage.setItem(`${syncKeyPrefix}:${householdId}`, value);
+}
+
+function entryFromRow(row: EntryRow): Entry {
+  return {
+    id: row.id,
+    householdId: row.household_id,
+    kind: row.kind,
+    title: row.title,
+    iconId: row.icon_id ?? undefined,
+    amount: Number(row.amount),
+    date: row.date,
+    recurrenceId: row.recurrence_id ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at ?? undefined,
+    syncStatus: "synced"
+  };
+}
+
+function recurrenceFromRow(row: RecurrenceRow): Recurrence {
+  return {
+    id: row.id,
+    householdId: row.household_id,
+    kind: row.kind,
+    title: row.title,
+    iconId: row.icon_id ?? undefined,
+    amount: Number(row.amount),
+    dayOfMonth: row.day_of_month,
+    startsOn: row.starts_on,
+    endsOn: row.ends_on ?? undefined,
+    active: row.active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at ?? undefined,
+    syncStatus: "synced"
+  };
+}
+
+function settingsFromRow(row: SettingsRow): AppSettings {
+  return {
+    id: row.id,
+    householdId: row.household_id,
+    openingBalance: Number(row.opening_balance),
+    openingDate: row.opening_date,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at ?? undefined,
+    syncStatus: "synced"
+  };
+}
+
+function entryToRow(entry: Entry): EntryRow {
+  return {
+    id: entry.id,
+    household_id: entry.householdId,
+    kind: entry.kind,
+    title: entry.title,
+    icon_id: entry.iconId ?? null,
+    amount: entry.amount,
+    date: entry.date,
+    recurrence_id: entry.recurrenceId ?? null,
+    created_at: entry.createdAt,
+    updated_at: entry.updatedAt,
+    deleted_at: entry.deletedAt ?? null
+  };
+}
+
+function recurrenceToRow(recurrence: Recurrence): RecurrenceRow {
+  return {
+    id: recurrence.id,
+    household_id: recurrence.householdId,
+    kind: recurrence.kind,
+    title: recurrence.title,
+    icon_id: recurrence.iconId ?? null,
+    amount: recurrence.amount,
+    day_of_month: recurrence.dayOfMonth,
+    starts_on: recurrence.startsOn,
+    ends_on: recurrence.endsOn ?? null,
+    active: recurrence.active,
+    created_at: recurrence.createdAt,
+    updated_at: recurrence.updatedAt,
+    deleted_at: recurrence.deletedAt ?? null
+  };
+}
+
+function settingsToRow(settings: AppSettings): SettingsRow {
+  return {
+    id: settings.id,
+    household_id: settings.householdId,
+    opening_balance: settings.openingBalance,
+    opening_date: settings.openingDate,
+    created_at: settings.createdAt,
+    updated_at: settings.updatedAt,
+    deleted_at: settings.deletedAt ?? null
+  };
 }

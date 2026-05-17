@@ -1,8 +1,17 @@
+import { type Session } from "@supabase/supabase-js";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { db, createBase, ensureSettings, exportBackup, importBackup, saveRecord, softDelete } from "./lib/db";
 import { syncNow } from "./lib/sync";
-import { clearAccessPin, getStoredAccessPin, verifyAccessPin } from "./lib/access";
+import {
+  createHousehold,
+  getHouseholdMembers,
+  loadCachedHouseholds,
+  loadHouseholdContext,
+  setSelectedHouseholdId as storeSelectedHouseholdId,
+  inviteHouseholdMember
+} from "./lib/households";
+import { getSupabaseClient, isSupabaseConfigured } from "./lib/supabase";
 import {
   addMonths,
   dayLabel,
@@ -17,18 +26,19 @@ import {
   todayIso,
   yearLabel
 } from "./domain/dates";
-import { active, calculateMonth, defaultSettings, type MonthSnapshot, type TimelineItem } from "./domain/finance";
+import { active, calculateMonth, defaultSettings, settingsIdForHousehold, type MonthSnapshot, type TimelineItem } from "./domain/finance";
 import { findIconById, searchIconOptions, type ServiceIcon } from "./domain/iconRegistry";
-import { buildInstallmentPlan, buildInstallmentPreview, parseInstallmentCount } from "./domain/installments";
-import type { AppSettings, Entry, FlowKind, Recurrence } from "./domain/types";
+import { buildInstallmentPlan, buildInstallmentPreview, MAX_INSTALLMENT_COUNT, parseInstallmentCount } from "./domain/installments";
+import type { AppSettings, Entry, FlowKind, HouseholdMember, HouseholdRole, HouseholdSummary, Recurrence } from "./domain/types";
 
 type View = "home" | "timeline";
-type Sheet = "entry" | "balance" | null;
+type Sheet = "entry" | "balance" | "households" | null;
 type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
 type ThemeMode = "light" | "dark";
 type MaterialIconName = "wallet" | "sync" | "update" | "export" | "import" | "add";
-type UiIconName = "home" | "list" | "more" | "close" | "delete" | "edit" | "moon" | "sun" | "lock";
-type AccessState = "checking" | "locked" | "unlocked";
+type UiIconName = "home" | "list" | "more" | "close" | "delete" | "edit" | "moon" | "sun" | "lock" | "users" | "info" | "warning";
+type AuthMode = "sign-in" | "sign-up" | "reset";
+type DialogTone = "info" | "error";
 type MovementTarget = Pick<TimelineItem, "source" | "recordId" | "date" | "title">;
 type EntrySheetRecord =
   | { source: "entry"; record: Entry }
@@ -44,6 +54,7 @@ const APP_UPDATE_RELOAD_DELAY_MS = 700;
 const THEME_STORAGE_KEY = "fluxo-casa-theme";
 const SWIPE_ACTION_WIDTH = 108;
 const SWIPE_TRIGGER_DISTANCE = 72;
+const INSTALLMENT_COUNT_OPTIONS = Array.from({ length: MAX_INSTALLMENT_COUNT - 1 }, (_, index) => index + 2);
 const MATERIAL_ICON_SRC: Record<MaterialIconName, string> = {
   wallet: "/material-symbols/account_balance_wallet.svg",
   sync: "/material-symbols/sync.svg",
@@ -60,25 +71,61 @@ const UI_ICON_PATHS: Record<UiIconName, string[]> = {
   delete: ["M4 7h16", "M10 11v6", "M14 11v6", "M6 7l1 13h10l1-13", "M9 7V5h6v2"],
   edit: ["M4 20h4L18.5 9.5l-4-4L4 16v4", "M13.5 6.5l4 4"],
   lock: ["M7 10V7a5 5 0 0 1 10 0v3", "M6 10h12v10H6z", "M12 14v2"],
+  users: ["M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20", "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z", "M21 20v-1.2a3.6 3.6 0 0 0-2.7-3.5", "M16 4.4a3.5 3.5 0 0 1 0 6.8"],
+  info: ["M12 17v-5", "M12 8h.01", "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"],
+  warning: ["M12 9v4", "M12 17h.01", "M10.3 4.4 2.5 18a1.7 1.7 0 0 0 1.5 2.5h16a1.7 1.7 0 0 0 1.5-2.5L13.7 4.4a1.7 1.7 0 0 0-3.4 0Z"],
   moon: ["M21 14.8A8.5 8.5 0 0 1 9.2 3 7 7 0 1 0 21 14.8Z"],
   sun: ["M12 4V2", "M12 22v-2", "m4.93 4.93-1.42-1.42", "m20.49 20.49-1.42-1.42", "M4 12H2", "M22 12h-2", "m4.93 19.07-1.42 1.42", "m20.49 3.51-1.42 1.42", "M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"]
 };
 
 function App() {
-  const [accessState, setAccessState] = useState<AccessState>(() => (getStoredAccessPin() ? "unlocked" : "locked"));
+  const [session, setSession] = useState<Session | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [passwordSetup, setPasswordSetup] = useState(() => isPasswordSetupUrl());
+  const supabaseConfigured = isSupabaseConfigured();
 
-  function handleLock() {
-    clearAccessPin();
-    setAccessState("locked");
+  useEffect(() => {
+    if (!supabaseConfigured) {
+      setCheckingSession(false);
+      return undefined;
+    }
+
+    const supabase = getSupabaseClient();
+    let mounted = true;
+
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setSession(data.session);
+      setCheckingSession(false);
+    });
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "PASSWORD_RECOVERY") setPasswordSetup(true);
+      setSession(nextSession);
+      setCheckingSession(false);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabaseConfigured]);
+
+  async function handleSignOut() {
+    await getSupabaseClient().auth.signOut();
+    setSession(null);
   }
 
-  if (accessState === "checking") return <AccessGate checking onUnlocked={() => setAccessState("unlocked")} />;
-  if (accessState === "locked") return <AccessGate onUnlocked={() => setAccessState("unlocked")} />;
+  if (checkingSession) return <AuthGate checking configured={supabaseConfigured} />;
+  if (!session) return <AuthGate configured={supabaseConfigured} />;
+  if (passwordSetup) return <PasswordSetupGate onDone={() => setPasswordSetup(false)} />;
 
-  return <FinanceApp onLock={handleLock} />;
+  return <FinanceApp session={session} onSignOut={() => void handleSignOut()} />;
 }
 
-function FinanceApp({ onLock }: { onLock: () => void }) {
+function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
   const [view, setView] = useState<View>("home");
   const currentMonth = monthKey();
   const [timelineMonth, setTimelineMonth] = useState(currentMonth);
@@ -91,14 +138,22 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
   const [syncState, setSyncState] = useState<SyncIndicatorState>("idle");
   const [syncHint, setSyncHint] = useState("Ainda não sincronizado");
   const [syncHintVisible, setSyncHintVisible] = useState(false);
+  const [households, setHouseholds] = useState<HouseholdSummary[]>([]);
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
+  const [householdLoading, setHouseholdLoading] = useState(true);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const syncingRef = useRef(false);
 
   useEffect(() => {
-    void ensureSettings();
-  }, []);
+    void refreshHouseholdContext();
+  }, [session.user.id]);
+
+  useEffect(() => {
+    if (!selectedHouseholdId) return;
+    void ensureSettings(selectedHouseholdId);
+  }, [selectedHouseholdId]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -123,6 +178,8 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
   }, []);
 
   useEffect(() => {
+    if (!selectedHouseholdId) return undefined;
+
     void runSync(false);
 
     const interval = window.setInterval(() => void runSync(false), 15 * 60 * 1000);
@@ -143,20 +200,35 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
       window.removeEventListener("online", syncWhenOnline);
       document.removeEventListener("visibilitychange", syncWhenVisible);
     };
-  }, []);
+  }, [selectedHouseholdId]);
 
-  const entries = useLiveQuery(() => db.entries.toArray(), [], []);
-  const recurrences = useLiveQuery(() => db.recurrences.toArray(), [], []);
-  const settings = useLiveQuery(() => db.settings.get("settings_app"), [], undefined);
+  const entries = useLiveQuery<Entry[]>(
+    () => (selectedHouseholdId ? db.entries.where("householdId").equals(selectedHouseholdId).toArray() : Promise.resolve([])),
+    [selectedHouseholdId]
+  ) ?? [];
+  const recurrences = useLiveQuery<Recurrence[]>(
+    () => (selectedHouseholdId ? db.recurrences.where("householdId").equals(selectedHouseholdId).toArray() : Promise.resolve([])),
+    [selectedHouseholdId]
+  ) ?? [];
+  const settings = useLiveQuery<AppSettings | undefined>(
+    () => (selectedHouseholdId ? db.settings.get(settingsIdForHousehold(selectedHouseholdId)) : Promise.resolve(undefined)),
+    [selectedHouseholdId]
+  );
+  const members = useLiveQuery<HouseholdMember[]>(
+    () => (selectedHouseholdId ? db.householdMembers.where("householdId").equals(selectedHouseholdId).toArray() : Promise.resolve([])),
+    [selectedHouseholdId]
+  ) ?? [];
 
   const data = useMemo(
     () => ({
       entries: entries.filter(active),
       recurrences: recurrences.filter(active),
-      settings: settings ?? defaultSettings()
+      settings: settings ?? defaultSettings(selectedHouseholdId || "pending")
     }),
-    [entries, recurrences, settings]
+    [entries, recurrences, selectedHouseholdId, settings]
   );
+  const selectedHousehold = households.find((household) => household.id === selectedHouseholdId);
+  const activeMembers = members.filter(active);
 
   const homeSnapshot = useMemo(() => calculateMonth(data, currentMonth), [data, currentMonth]);
   const editingSheetRecord = useMemo<EntrySheetRecord | undefined>(() => {
@@ -225,12 +297,66 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
     setMenuOpen(false);
   }
 
+  async function refreshHouseholdContext(showMessage = false) {
+    setHouseholdLoading(true);
+    try {
+      const context = await loadHouseholdContext(session);
+      setHouseholds(context.households);
+      setSelectedHouseholdId(context.selectedHouseholdId);
+      await ensureSettings(context.selectedHouseholdId);
+      if (showMessage) setMessage("Casas atualizadas.");
+    } catch (error) {
+      const cachedHouseholds = await loadCachedHouseholds();
+      const fallbackHouseholdId = cachedHouseholds.find((household) => household.id === selectedHouseholdId)?.id ?? cachedHouseholds[0]?.id ?? "";
+      setHouseholds(cachedHouseholds);
+      setSelectedHouseholdId(fallbackHouseholdId);
+      if (fallbackHouseholdId) await ensureSettings(fallbackHouseholdId);
+      setMessage(error instanceof Error ? error.message : "Nao foi possivel carregar suas casas.");
+    } finally {
+      setHouseholdLoading(false);
+    }
+  }
+
+  async function handleSelectHousehold(householdId: string) {
+    storeSelectedHouseholdId(householdId);
+    setSelectedHouseholdId(householdId);
+    setSheet(null);
+    setMenuOpen(false);
+    await ensureSettings(householdId);
+    void runSync(false, householdId);
+  }
+
+  async function handleCreateHousehold(name: string) {
+    try {
+      const context = await createHousehold(name);
+      setHouseholds(context.households);
+      setSelectedHouseholdId(context.selectedHouseholdId);
+      await ensureSettings(context.selectedHouseholdId);
+      setMessage("Casa criada.");
+      void runSync(false, context.selectedHouseholdId);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Nao foi possivel criar a casa.");
+    }
+  }
+
+  async function handleInviteMember(email: string, role: HouseholdRole) {
+    if (!selectedHouseholdId) return;
+    try {
+      await inviteHouseholdMember(selectedHouseholdId, email, role);
+      await getHouseholdMembers(selectedHouseholdId);
+      setMessage("Convite enviado.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Nao foi possivel enviar o convite.");
+    }
+  }
+
   function revealSyncHint(text?: string) {
     if (text) setSyncHint(text);
     setSyncHintVisible(true);
   }
 
-  async function runSync(showHint: boolean) {
+  async function runSync(showHint: boolean, targetHouseholdId = selectedHouseholdId) {
+    if (!targetHouseholdId) return;
     if (syncingRef.current) {
       if (showHint) revealSyncHint("Atualizando...");
       return;
@@ -241,7 +367,7 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
     if (showHint) setSyncHintVisible(true);
 
     try {
-      const result = await syncNow();
+      const result = await syncNow(targetHouseholdId);
       setSyncState(result.ok ? "synced" : "error");
       setSyncHint(result.ok ? "Sincronizado" : result.message);
       if (showHint || !result.ok) setSyncHintVisible(true);
@@ -251,7 +377,8 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
   }
 
   async function handleExport() {
-    const backup = await exportBackup();
+    if (!selectedHouseholdId) return;
+    const backup = await exportBackup(selectedHouseholdId);
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -263,13 +390,17 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
   }
 
   async function handleImport(file?: File) {
-    if (!file) return;
-    await importBackup(JSON.parse(await file.text()));
+    if (!file || !selectedHouseholdId) return;
+    await importBackup(JSON.parse(await file.text()), selectedHouseholdId);
     setMessage("Backup importado.");
     setMenuOpen(false);
   }
 
   function handleNewEntry() {
+    if (!selectedHouseholdId) {
+      setMessage("Selecione uma casa antes de lançar.");
+      return;
+    }
     setEditingMovement(null);
     setSheet("entry");
   }
@@ -383,6 +514,10 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
 
         {menuOpen && (
           <div id="main-overflow-menu" ref={menuRef} className="overflow-menu" role="menu" aria-label="Menu de ações" onKeyDown={handleOverflowMenuKeyDown}>
+            <button role="menuitem" type="button" onClick={() => { setSheet("households"); setMenuOpen(false); }}>
+              <UiIcon name="users" />
+              <span>{selectedHousehold?.name ?? "Casa e membros"}</span>
+            </button>
             <button role="menuitem" type="button" onClick={() => { setSheet("balance"); setMenuOpen(false); }}>
               <MaterialIcon name="wallet" className="menu-icon" />
               <span>Ajustar saldo inicial</span>
@@ -399,9 +534,9 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
               <UiIcon name={theme === "dark" ? "sun" : "moon"} />
               <span>{theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}</span>
             </button>
-            <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); onLock(); }}>
+            <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); onSignOut(); }}>
               <UiIcon name="lock" />
-              <span>Bloquear app</span>
+              <span>Sair</span>
             </button>
             <div className="menu-divider" role="separator" />
             <button role="menuitem" type="button" onClick={handleExport}>
@@ -427,7 +562,9 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
       {message && <div className="snackbar">{message}</div>}
 
       <main className={view === "timeline" ? "content timeline-content" : "content"}>
-        {view === "home" ? (
+        {householdLoading && !selectedHouseholdId ? (
+          <div className="empty-state">Carregando suas casas...</div>
+        ) : view === "home" ? (
           <HomeView snapshot={homeSnapshot} />
         ) : (
           <TimelineView
@@ -469,12 +606,26 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
       {sheet === "entry" && (
         <EntrySheet
           movement={editingSheetRecord}
+          householdId={selectedHouseholdId}
           settings={data.settings}
           onClose={handleCloseEntrySheet}
           onSaved={handleEntrySaved}
         />
       )}
       {sheet === "balance" && <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
+      {sheet === "households" && (
+        <HouseholdSheet
+          currentUserEmail={session.user.email ?? ""}
+          households={households}
+          members={activeMembers}
+          selectedHouseholdId={selectedHouseholdId}
+          onClose={() => setSheet(null)}
+          onCreate={(name) => void handleCreateHousehold(name)}
+          onInvite={(email, role) => void handleInviteMember(email, role)}
+          onRefresh={() => void refreshHouseholdContext(true)}
+          onSelect={(householdId) => void handleSelectHousehold(householdId)}
+        />
+      )}
       {deletingMovement && (
         <DeleteMovementSheet
           item={deletingMovement}
@@ -486,28 +637,89 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
   );
 }
 
-function AccessGate({ checking = false, onUnlocked }: { checking?: boolean; onUnlocked: () => void }) {
-  const [pin, setPin] = useState("");
-  const [status, setStatus] = useState(checking ? "Verificando..." : "");
+function AuthGate({ checking = false, configured }: { checking?: boolean; configured: boolean }) {
+  const [mode, setMode] = useState<AuthMode>("sign-in");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState(checking ? "Verificando sessao..." : "");
+  const [dialog, setDialog] = useState<{ tone: DialogTone; title: string; message: string; onClose?: () => void } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (checking) {
+      setStatus("Verificando sessao...");
+      return;
+    }
+
+    setStatus((current) => (current === "Verificando sessao..." ? "" : current));
+  }, [checking]);
+
+  function closeDialog() {
+    const onClose = dialog?.onClose;
+    setDialog(null);
+    onClose?.();
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (submitting) return;
+    if (submitting || !configured) return;
 
     setSubmitting(true);
     setStatus("");
 
     try {
-      const result = await verifyAccessPin(pin);
-      if (!result.ok) {
-        setStatus(result.message);
+      const supabase = getSupabaseClient();
+      if (mode === "reset") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: import.meta.env.VITE_APP_URL || window.location.origin
+        });
+        if (error) throw error;
+        setDialog({
+          tone: "info",
+          title: "E-mail enviado",
+          message: "Enviamos uma mensagem com as instrucoes para recuperar sua senha.",
+          onClose: () => {
+            setMode("sign-in");
+            setPassword("");
+          }
+        });
         return;
       }
 
-      onUnlocked();
-    } catch {
-      setStatus("Nao foi possivel validar o PIN.");
+      if (mode === "sign-up") {
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            emailRedirectTo: import.meta.env.VITE_APP_URL || window.location.origin
+          }
+        });
+        if (error) throw error;
+        if (!data.session) {
+          setDialog({
+            tone: "info",
+            title: "Cadastro criado",
+            message: "Enviamos um e-mail de confirmacao. Confirme seu cadastro antes de entrar.",
+            onClose: () => {
+              setMode("sign-in");
+              setPassword("");
+            }
+          });
+        }
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password
+      });
+      if (error) throw error;
+    } catch (error) {
+      setDialog({
+        tone: "error",
+        title: "Nao foi possivel entrar",
+        message: translateAuthError(error)
+      });
     } finally {
       setSubmitting(false);
     }
@@ -520,28 +732,167 @@ function AccessGate({ checking = false, onUnlocked }: { checking?: boolean; onUn
           <UiIcon name="lock" />
         </div>
         <h1>Fluxo Casa</h1>
+        {!configured ? (
+          <p role="status">Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no .env.local.</p>
+        ) : (
+          <>
+            <div className="auth-tabs" role="group" aria-label="Acesso">
+              <button className={mode === "sign-in" ? "active" : ""} type="button" onClick={() => setMode("sign-in")}>
+                Entrar
+              </button>
+              <button className={mode === "sign-up" ? "active" : ""} type="button" onClick={() => setMode("sign-up")}>
+                Criar
+              </button>
+            </div>
+            <label>
+              E-mail
+              <input
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                type="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                spellCheck={false}
+                autoFocus
+                required
+              />
+            </label>
+            {mode !== "reset" && (
+              <label>
+                Senha
+                <input
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  type="password"
+                  autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
+                  minLength={6}
+                  required
+                />
+              </label>
+            )}
+            <button className="filled-button" type="submit" disabled={submitting}>
+              {submitting ? "Aguarde..." : mode === "reset" ? "Enviar e-mail" : mode === "sign-up" ? "Criar conta" : "Entrar"}
+            </button>
+            <button className="text-button" type="button" onClick={() => setMode(mode === "reset" ? "sign-in" : "reset")}>
+              {mode === "reset" ? "Voltar para login" : "Esqueci minha senha"}
+            </button>
+            {status && <p role="status">{status}</p>}
+          </>
+        )}
+      </form>
+      {dialog && <MaterialDialog tone={dialog.tone} title={dialog.title} message={dialog.message} onConfirm={closeDialog} />}
+    </main>
+  );
+}
+
+function PasswordSetupGate({ onDone }: { onDone: () => void }) {
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState("");
+  const [dialog, setDialog] = useState<{ tone: DialogTone; title: string; message: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (submitting) return;
+
+    setSubmitting(true);
+    setStatus("");
+
+    try {
+      const { error } = await getSupabaseClient().auth.updateUser({ password });
+      if (error) throw error;
+      onDone();
+    } catch (error) {
+      setDialog({
+        tone: "error",
+        title: "Senha nao salva",
+        message: translateAuthError(error)
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="access-screen">
+      <form className="access-panel" onSubmit={handleSubmit}>
+        <div className="access-mark">
+          <UiIcon name="lock" />
+        </div>
+        <h1>Definir senha</h1>
         <label>
-          PIN de acesso
-          <input
-            value={pin}
-            onChange={(event) => setPin(event.target.value)}
-            type="password"
-            inputMode="text"
-            pattern="[A-Za-z0-9]+"
-            autoComplete="current-password"
-            autoCapitalize="none"
-            spellCheck={false}
-            autoFocus
-            required
-          />
+          Nova senha
+          <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="new-password" minLength={6} required />
         </label>
         <button className="filled-button" type="submit" disabled={submitting}>
-          {submitting ? "Entrando..." : "Entrar"}
+          {submitting ? "Salvando..." : "Salvar senha"}
         </button>
         {status && <p role="status">{status}</p>}
       </form>
+      {dialog && <MaterialDialog tone={dialog.tone} title={dialog.title} message={dialog.message} onConfirm={() => setDialog(null)} />}
     </main>
   );
+}
+
+function MaterialDialog({
+  tone,
+  title,
+  message,
+  onConfirm
+}: {
+  tone: DialogTone;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="dialog-backdrop">
+      <section className={`material-dialog ${tone}`} role={tone === "error" ? "alertdialog" : "dialog"} aria-modal="true" aria-labelledby="auth-dialog-title">
+        <div className="dialog-icon" aria-hidden="true">
+          <UiIcon name={tone === "error" ? "warning" : "info"} />
+        </div>
+        <h2 id="auth-dialog-title">{title}</h2>
+        <p>{message}</p>
+        <div className="dialog-actions">
+          <button className="text-button" type="button" onClick={onConfirm} autoFocus>
+            OK
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function translateAuthError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error || "");
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("email not confirmed")) {
+    return "E-mail nao confirmado. Abra a mensagem que enviamos e confirme seu cadastro antes de entrar.";
+  }
+  if (normalized.includes("invalid login credentials")) {
+    return "E-mail ou senha incorretos. Confira os dados e tente novamente.";
+  }
+  if (normalized.includes("user already registered") || normalized.includes("already registered")) {
+    return "Este e-mail ja possui cadastro. Entre com sua senha ou recupere o acesso.";
+  }
+  if (normalized.includes("password") && (normalized.includes("6") || normalized.includes("weak"))) {
+    return "A senha precisa ter pelo menos 6 caracteres.";
+  }
+  if (normalized.includes("rate limit") || normalized.includes("too many")) {
+    return "Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.";
+  }
+  if (normalized.includes("failed to fetch") || normalized.includes("network")) {
+    return "Nao foi possivel conectar ao Supabase. Verifique sua conexao e tente novamente.";
+  }
+
+  return "Nao foi possivel concluir esta acao. Tente novamente.";
+}
+
+function isPasswordSetupUrl(): boolean {
+  if (typeof window === "undefined") return false;
+  const value = `${window.location.hash} ${window.location.search}`;
+  return value.includes("type=recovery") || value.includes("type=invite");
 }
 
 function readInitialTheme(): ThemeMode {
@@ -1049,11 +1400,13 @@ function MonthPage({
 
 function EntrySheet({
   movement,
+  householdId,
   settings,
   onClose,
   onSaved
 }: {
   movement?: EntrySheetRecord;
+  householdId: string;
   settings: AppSettings;
   onClose: () => void;
   onSaved: () => void;
@@ -1113,6 +1466,7 @@ function EntrySheet({
       if (recurrenceScope === "this") {
         await saveRecord("entries", {
           ...createBase("entry"),
+          householdId,
           kind,
           title: effectiveTitle,
           iconId: selectedIconId,
@@ -1140,6 +1494,7 @@ function EntrySheet({
           });
           await saveRecord("recurrences", {
             ...createBase("recurrence"),
+            householdId,
             kind,
             title: effectiveTitle,
             iconId: selectedIconId,
@@ -1164,6 +1519,7 @@ function EntrySheet({
     } else if (entryMode === "recurring") {
       await saveRecord("recurrences", {
         ...createBase("recurrence"),
+        householdId,
         kind,
         title: effectiveTitle,
         iconId: selectedIconId,
@@ -1184,6 +1540,7 @@ function EntrySheet({
       for (const installment of installmentPlan) {
         await saveRecord("entries", {
           ...createBase("entry"),
+          householdId,
           kind,
           title: installment.title,
           iconId: selectedIconId,
@@ -1194,6 +1551,7 @@ function EntrySheet({
     } else {
       await saveRecord("entries", {
         ...createBase("entry"),
+        householdId,
         kind,
         title: effectiveTitle,
         iconId: selectedIconId,
@@ -1218,19 +1576,32 @@ function EntrySheet({
           </button>
         </div>
 
-        {!editing && (
-          <div className="mode-segmented" role="group" aria-label="Tipo de lançamento">
-            <button className={entryMode === "single" ? "active" : ""} type="button" onClick={() => handleEntryModeChange("single")}>
-              Avulso
-            </button>
-            <button className={entryMode === "recurring" ? "active" : ""} type="button" onClick={() => handleEntryModeChange("recurring")}>
-              Recorrente
-            </button>
-            <button className={entryMode === "installment" ? "active" : ""} type="button" onClick={() => handleEntryModeChange("installment")}>
-              Parcelado
-            </button>
-          </div>
-        )}
+        <div className="mode-segmented" role="group" aria-label={editing ? "Tipo de lançamento fixo na edição" : "Tipo de lançamento"}>
+          <button
+            className={entryMode === "single" ? "active" : ""}
+            type="button"
+            onClick={() => handleEntryModeChange("single")}
+            disabled={editing}
+          >
+            Avulso
+          </button>
+          <button
+            className={entryMode === "recurring" ? "active" : ""}
+            type="button"
+            onClick={() => handleEntryModeChange("recurring")}
+            disabled={editing}
+          >
+            Recorrente
+          </button>
+          <button
+            className={entryMode === "installment" ? "active" : ""}
+            type="button"
+            onClick={() => handleEntryModeChange("installment")}
+            disabled={editing}
+          >
+            Parcelado
+          </button>
+        </div>
 
         <label>
           Título
@@ -1268,43 +1639,61 @@ function EntrySheet({
           </div>
         )}
 
-        <label>
-          {entryMode === "installment" ? "Valor total" : "Valor"}
-          <span className="currency-input">
-            <span className="currency-prefix" aria-hidden="true">
-              R$
-            </span>
-            <input
-              value={amountDisplay}
-              onChange={(event) => setAmountDigits(extractCurrencyDigits(event.target.value))}
-              type="text"
-              inputMode="decimal"
-              placeholder="0,00"
-              autoComplete="off"
-              required
-            />
-          </span>
-        </label>
-        {entryMode === "installment" && (
+        {entryMode === "installment" ? (
           <>
-            <label>
-              Parcelas
-              <input
-                value={installmentCountText}
-                onChange={(event) => setInstallmentCountText(event.target.value.replace(/\D/g, "").slice(0, 3))}
-                type="number"
-                inputMode="numeric"
-                min="2"
-                max="120"
-                required
-              />
-            </label>
+            <div className="installment-fields">
+              <label>
+                Valor total
+                <span className="currency-input">
+                  <span className="currency-prefix" aria-hidden="true">
+                    R$
+                  </span>
+                  <input
+                    value={amountDisplay}
+                    onChange={(event) => setAmountDigits(extractCurrencyDigits(event.target.value))}
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    autoComplete="off"
+                    required
+                  />
+                </span>
+              </label>
+              <label>
+                Parcelas
+                <select value={installmentCountText} onChange={(event) => setInstallmentCountText(event.target.value)} required>
+                  {INSTALLMENT_COUNT_OPTIONS.map((count) => (
+                    <option key={count} value={String(count)}>
+                      {count}x
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             {installmentPreview && (
               <div className="installment-preview" role="status">
                 {installmentPreview}
               </div>
             )}
           </>
+        ) : (
+          <label>
+            Valor
+            <span className="currency-input">
+              <span className="currency-prefix" aria-hidden="true">
+                R$
+              </span>
+              <input
+                value={amountDisplay}
+                onChange={(event) => setAmountDigits(extractCurrencyDigits(event.target.value))}
+                type="text"
+                inputMode="decimal"
+                placeholder="0,00"
+                autoComplete="off"
+                required
+              />
+            </span>
+          </label>
         )}
         <label>
           {entryMode === "installment" ? "Primeira parcela" : "Data"}
@@ -1315,16 +1704,6 @@ function EntrySheet({
             {dateWarning}
           </div>
         )}
-        {editing && (
-          <label className="switch-row">
-            <span>
-              Recorrente
-              <small>Repete todo mês no mesmo dia</small>
-            </span>
-            <input checked={editingRecurrence} type="checkbox" disabled />
-          </label>
-        )}
-
         {editingRecurrence && (
           <fieldset className="scope-group">
             <legend>Aplicar alteração</legend>
@@ -1376,6 +1755,135 @@ function EntrySheet({
       </form>
     </BottomSheet>
   );
+}
+
+function HouseholdSheet({
+  currentUserEmail,
+  households,
+  members,
+  selectedHouseholdId,
+  onClose,
+  onCreate,
+  onInvite,
+  onRefresh,
+  onSelect
+}: {
+  currentUserEmail: string;
+  households: HouseholdSummary[];
+  members: HouseholdMember[];
+  selectedHouseholdId: string;
+  onClose: () => void;
+  onCreate: (name: string) => void;
+  onInvite: (email: string, role: HouseholdRole) => void;
+  onRefresh: () => void;
+  onSelect: (householdId: string) => void;
+}) {
+  const [householdName, setHouseholdName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<HouseholdRole>("member");
+  const selectedHousehold = households.find((household) => household.id === selectedHouseholdId);
+  const canInvite = selectedHousehold?.role === "owner" || selectedHousehold?.role === "admin";
+
+  function handleCreate(event: FormEvent) {
+    event.preventDefault();
+    if (!householdName.trim()) return;
+    onCreate(householdName);
+    setHouseholdName("");
+  }
+
+  function handleInvite(event: FormEvent) {
+    event.preventDefault();
+    if (!inviteEmail.trim()) return;
+    onInvite(inviteEmail, inviteRole);
+    setInviteEmail("");
+    setInviteRole("member");
+  }
+
+  return (
+    <BottomSheet title="Casa e membros" onClose={onClose}>
+      <div className="household-sheet">
+        <div className="household-current">
+          <span>Conectado como</span>
+          <strong>{currentUserEmail}</strong>
+        </div>
+
+        <div className="household-list" role="list" aria-label="Casas">
+          {households.map((household) => (
+            <button
+              key={household.id}
+              className={household.id === selectedHouseholdId ? "active" : ""}
+              type="button"
+              role="listitem"
+              onClick={() => onSelect(household.id)}
+            >
+              <span>{household.name}</span>
+              <small>{roleLabel(household.role)}</small>
+            </button>
+          ))}
+        </div>
+
+        <form className="sheet-form" onSubmit={handleCreate}>
+          <label>
+            Nova casa
+            <input value={householdName} onChange={(event) => setHouseholdName(event.target.value)} placeholder="Casa, apartamento, família" />
+          </label>
+          <button className="tonal-button" type="submit">
+            Criar casa
+          </button>
+        </form>
+
+        <div className="member-section">
+          <div className="section-title">
+            <span>Membros</span>
+            <button className="text-button" type="button" onClick={onRefresh}>
+              Atualizar
+            </button>
+          </div>
+          <div className="member-list">
+            {members.length === 0 ? (
+              <div className="empty-state compact">Nenhum membro carregado.</div>
+            ) : (
+              members.map((member) => (
+                <div key={member.id} className="member-row">
+                  <span>{member.email || member.userId}</span>
+                  <small>{roleLabel(member.role)}</small>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <form className="sheet-form" onSubmit={handleInvite}>
+          <label>
+            Convidar por e-mail
+            <input
+              value={inviteEmail}
+              onChange={(event) => setInviteEmail(event.target.value)}
+              type="email"
+              placeholder="pessoa@email.com"
+              disabled={!canInvite}
+            />
+          </label>
+          <label>
+            Permissão
+            <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as HouseholdRole)} disabled={!canInvite}>
+              <option value="member">Membro</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </label>
+          <button className="filled-button" type="submit" disabled={!canInvite}>
+            Enviar convite
+          </button>
+        </form>
+      </div>
+    </BottomSheet>
+  );
+}
+
+function roleLabel(role: HouseholdRole): string {
+  if (role === "owner") return "Dono";
+  if (role === "admin") return "Administrador";
+  return "Membro";
 }
 
 function BalanceSheet({ settings, onClose, onSaved }: { settings: AppSettings; onClose: () => void; onSaved: () => void }) {
