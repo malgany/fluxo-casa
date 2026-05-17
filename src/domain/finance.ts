@@ -26,6 +26,7 @@ export interface TimelineItem {
   date: string;
   future: boolean;
   recurring: boolean;
+  recurrenceId?: string;
   source: "entry" | "recurrence";
 }
 
@@ -61,9 +62,10 @@ export function defaultSettings(today = todayIso()): AppSettings {
   };
 }
 
-export function buildMonthItems(data: Pick<FinanceData, "entries" | "recurrences">, month: string, today = todayIso()): TimelineItem[] {
+export function buildMonthItems(data: FinanceData, month: string, today = todayIso()): TimelineItem[] {
   const entries = data.entries
     .filter(active)
+    .filter((entry) => entry.date >= data.settings.openingDate)
     .filter((entry) => monthKey(entry.date) === month)
     .map<TimelineItem>((entry) => ({
       id: entry.id,
@@ -75,14 +77,18 @@ export function buildMonthItems(data: Pick<FinanceData, "entries" | "recurrences
       date: entry.date,
       future: entry.date > today,
       recurring: Boolean(entry.recurrenceId),
+      recurrenceId: entry.recurrenceId,
       source: "entry"
     }));
 
   const recurring = data.recurrences
     .filter(active)
     .filter((rule) => rule.active)
-    .filter((rule) => monthKey(rule.startsOn) <= month && (!rule.endsOn || monthKey(rule.endsOn) >= month))
-    .filter((rule) => !entries.some((entry) => entry.recurring && entry.date === dateInMonth(month, rule.dayOfMonth) && entry.title === rule.title))
+    .filter((rule) => {
+      const date = dateInMonth(month, rule.dayOfMonth);
+      return date >= rule.startsOn && (!rule.endsOn || date <= rule.endsOn) && date >= data.settings.openingDate;
+    })
+    .filter((rule) => !entries.some((entry) => entry.recurrenceId === rule.id && entry.date === dateInMonth(month, rule.dayOfMonth)))
     .map<TimelineItem>((rule) => {
       const date = dateInMonth(month, rule.dayOfMonth);
       return {

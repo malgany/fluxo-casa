@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { db, createBase, ensureSettings, exportBackup, importBackup, saveRecord } from "./lib/db";
+import { type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { db, createBase, ensureSettings, exportBackup, importBackup, saveRecord, softDelete } from "./lib/db";
 import { syncNow } from "./lib/sync";
 import { clearAccessPin, getStoredAccessPin, verifyAccessPin } from "./lib/access";
 import {
@@ -12,12 +12,14 @@ import {
   monthKey,
   monthLabel,
   monthName,
+  previousDay,
   signedAmount,
   todayIso,
   yearLabel
 } from "./domain/dates";
-import { active, calculateMonth, defaultSettings, type MonthSnapshot } from "./domain/finance";
+import { active, calculateMonth, defaultSettings, type MonthSnapshot, type TimelineItem } from "./domain/finance";
 import { findIconById, searchIconOptions, type ServiceIcon } from "./domain/iconRegistry";
+import { buildInstallmentPlan, buildInstallmentPreview, parseInstallmentCount } from "./domain/installments";
 import type { AppSettings, Entry, FlowKind, Recurrence } from "./domain/types";
 
 type View = "home" | "timeline";
@@ -25,8 +27,14 @@ type Sheet = "entry" | "balance" | null;
 type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
 type ThemeMode = "light" | "dark";
 type MaterialIconName = "wallet" | "sync" | "update" | "export" | "import" | "add";
-type UiIconName = "home" | "list" | "more" | "close" | "delete" | "moon" | "sun" | "lock";
+type UiIconName = "home" | "list" | "more" | "close" | "delete" | "edit" | "moon" | "sun" | "lock";
 type AccessState = "checking" | "locked" | "unlocked";
+type MovementTarget = Pick<TimelineItem, "source" | "recordId" | "date" | "title">;
+type EntrySheetRecord =
+  | { source: "entry"; record: Entry }
+  | { source: "recurrence"; record: Recurrence; occurrenceDate: string };
+type RecurrenceEditScope = "this" | "future" | "all";
+type EntryMode = "single" | "recurring" | "installment";
 type AppData = {
   entries: Entry[];
   recurrences: Recurrence[];
@@ -34,6 +42,8 @@ type AppData = {
 };
 const APP_UPDATE_RELOAD_DELAY_MS = 700;
 const THEME_STORAGE_KEY = "fluxo-casa-theme";
+const SWIPE_ACTION_WIDTH = 108;
+const SWIPE_TRIGGER_DISTANCE = 72;
 const MATERIAL_ICON_SRC: Record<MaterialIconName, string> = {
   wallet: "/material-symbols/account_balance_wallet.svg",
   sync: "/material-symbols/sync.svg",
@@ -48,6 +58,7 @@ const UI_ICON_PATHS: Record<UiIconName, string[]> = {
   more: ["M12 5h.01", "M12 12h.01", "M12 19h.01"],
   close: ["M18 6 6 18", "M6 6l12 12"],
   delete: ["M4 7h16", "M10 11v6", "M14 11v6", "M6 7l1 13h10l1-13", "M9 7V5h6v2"],
+  edit: ["M4 20h4L18.5 9.5l-4-4L4 16v4", "M13.5 6.5l4 4"],
   lock: ["M7 10V7a5 5 0 0 1 10 0v3", "M6 10h12v10H6z", "M12 14v2"],
   moon: ["M21 14.8A8.5 8.5 0 0 1 9.2 3 7 7 0 1 0 21 14.8Z"],
   sun: ["M12 4V2", "M12 22v-2", "m4.93 4.93-1.42-1.42", "m20.49 20.49-1.42-1.42", "M4 12H2", "M22 12h-2", "m4.93 19.07-1.42 1.42", "m20.49 3.51-1.42 1.42", "M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"]
@@ -72,6 +83,8 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
   const currentMonth = monthKey();
   const [timelineMonth, setTimelineMonth] = useState(currentMonth);
   const [sheet, setSheet] = useState<Sheet>(null);
+  const [editingMovement, setEditingMovement] = useState<MovementTarget | null>(null);
+  const [deletingMovement, setDeletingMovement] = useState<MovementTarget | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() => readInitialTheme());
   const [message, setMessage] = useState("");
@@ -146,6 +159,17 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
   );
 
   const homeSnapshot = useMemo(() => calculateMonth(data, currentMonth), [data, currentMonth]);
+  const editingSheetRecord = useMemo<EntrySheetRecord | undefined>(() => {
+    if (!editingMovement) return undefined;
+
+    if (editingMovement.source === "entry") {
+      const record = data.entries.find((entry) => entry.id === editingMovement.recordId);
+      return record ? { source: "entry", record } : undefined;
+    }
+
+    const record = data.recurrences.find((recurrence) => recurrence.id === editingMovement.recordId);
+    return record ? { source: "recurrence", record, occurrenceDate: editingMovement.date } : undefined;
+  }, [data.entries, data.recurrences, editingMovement]);
 
   useEffect(() => {
     if (!message) return undefined;
@@ -243,6 +267,63 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
     await importBackup(JSON.parse(await file.text()));
     setMessage("Backup importado.");
     setMenuOpen(false);
+  }
+
+  function handleNewEntry() {
+    setEditingMovement(null);
+    setSheet("entry");
+  }
+
+  function handleEditMovement(item: TimelineItem) {
+    const exists =
+      item.source === "entry"
+        ? data.entries.some((entry) => entry.id === item.recordId)
+        : data.recurrences.some((recurrence) => recurrence.id === item.recordId);
+
+    if (!exists) {
+      setMessage("Movimento não encontrado.");
+      return;
+    }
+
+    setEditingMovement({
+      source: item.source,
+      recordId: item.recordId,
+      date: item.date,
+      title: item.title
+    });
+    setSheet("entry");
+  }
+
+  function handleDeleteMovement(item: TimelineItem) {
+    setDeletingMovement({
+      source: item.source,
+      recordId: item.recordId,
+      date: item.date,
+      title: item.title
+    });
+  }
+
+  async function confirmDeleteMovement() {
+    if (!deletingMovement) return;
+
+    await softDelete(deletingMovement.source === "entry" ? "entries" : "recurrences", deletingMovement.recordId);
+    setMessage(deletingMovement.source === "recurrence" ? "Recorrência excluída." : "Lançamento excluído.");
+    setDeletingMovement(null);
+    void runSync(false);
+  }
+
+  function handleCloseEntrySheet() {
+    setSheet(null);
+    setEditingMovement(null);
+  }
+
+  function handleEntrySaved() {
+    if (!editingMovement) {
+      setTimelineMonth(monthKey());
+      setView("timeline");
+    }
+    setEditingMovement(null);
+    void runSync(false);
   }
 
   function handleOverflowMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -349,7 +430,14 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
         {view === "home" ? (
           <HomeView snapshot={homeSnapshot} />
         ) : (
-          <TimelineView data={data} month={timelineMonth} setMonth={setTimelineMonth} onChanged={() => void runSync(false)} />
+          <TimelineView
+            data={data}
+            month={timelineMonth}
+            setMonth={setTimelineMonth}
+            onChanged={() => void runSync(false)}
+            onEditMovement={handleEditMovement}
+            onDeleteMovement={(item) => void handleDeleteMovement(item)}
+          />
         )}
       </main>
 
@@ -360,7 +448,7 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
           </span>
           Dashboard
         </button>
-        <button className="nav-action" type="button" onClick={() => setSheet("entry")} aria-label="Novo lançamento">
+        <button className="nav-action" type="button" onClick={handleNewEntry} aria-label="Novo lançamento">
           Novo
         </button>
         <button
@@ -380,15 +468,20 @@ function FinanceApp({ onLock }: { onLock: () => void }) {
 
       {sheet === "entry" && (
         <EntrySheet
-          onClose={() => setSheet(null)}
-          onSaved={() => {
-            setTimelineMonth(monthKey());
-            setView("timeline");
-            void runSync(false);
-          }}
+          movement={editingSheetRecord}
+          settings={data.settings}
+          onClose={handleCloseEntrySheet}
+          onSaved={handleEntrySaved}
         />
       )}
       {sheet === "balance" && <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
+      {deletingMovement && (
+        <DeleteMovementSheet
+          item={deletingMovement}
+          onCancel={() => setDeletingMovement(null)}
+          onConfirm={() => void confirmDeleteMovement()}
+        />
+      )}
     </div>
   );
 }
@@ -741,16 +834,48 @@ function round(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function amountToCurrencyDigits(amount: number): string {
+  const cents = Math.round(amount * 100);
+  return cents > 0 ? String(cents) : "";
+}
+
+function extractCurrencyDigits(value: string): string {
+  const digits = value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  return digits && Number(digits) > 0 ? digits : "";
+}
+
+function formatCurrencyDigits(digits: string): string {
+  if (!digits) return "";
+  const amount = currencyDigitsToAmount(digits);
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount);
+}
+
+function currencyDigitsToAmount(digits: string): number {
+  if (!digits) return 0;
+  return Number((Number(digits) / 100).toFixed(2));
+}
+
 function TimelineView({
   data,
   month,
   setMonth,
-  onChanged
+  onChanged,
+  onEditMovement,
+  onDeleteMovement
 }: {
   data: AppData;
   month: string;
   setMonth: (month: string) => void;
   onChanged: () => void;
+  onEditMovement: (item: TimelineItem) => void;
+  onDeleteMovement: (item: TimelineItem) => void;
 }) {
   const [displayMonth, setDisplayMonth] = useState(month);
   const [motion, setMotion] = useState<"prev" | "next" | null>(null);
@@ -800,6 +925,11 @@ function TimelineView({
     <section
       className="timeline-stack"
       onTouchStart={(event) => {
+        if ((event.target as HTMLElement).closest(".swipe-row")) {
+          touchStart.current = null;
+          return;
+        }
+
         const touch = event.touches[0];
         touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
       }}
@@ -822,6 +952,8 @@ function TimelineView({
               onPrevious={() => navigate("prev")}
               onNext={() => navigate("next")}
               onChanged={onChanged}
+              onEditMovement={onEditMovement}
+              onDeleteMovement={onDeleteMovement}
               disabled={Boolean(motion)}
               visible={index === 1}
               consolidated={consolidated}
@@ -839,6 +971,8 @@ function MonthPage({
   onPrevious,
   onNext,
   onChanged,
+  onEditMovement,
+  onDeleteMovement,
   disabled,
   visible,
   consolidated,
@@ -848,6 +982,8 @@ function MonthPage({
   onPrevious: () => void;
   onNext: () => void;
   onChanged: () => void;
+  onEditMovement: (item: TimelineItem) => void;
+  onDeleteMovement: (item: TimelineItem) => void;
   disabled: boolean;
   visible: boolean;
   consolidated: boolean;
@@ -889,7 +1025,15 @@ function MonthPage({
             {snapshot.items.length === 0 ? (
               <div className="empty-state">Nenhum lançamento neste mês.</div>
             ) : (
-              snapshot.items.map((item) => <TimelineRow key={item.id} item={item} consolidated={consolidated} />)
+              snapshot.items.map((item) => (
+                <TimelineRow
+                  key={item.id}
+                  item={item}
+                  consolidated={consolidated}
+                  onEdit={onEditMovement}
+                  onDelete={onDeleteMovement}
+                />
+              ))
             )}
           </div>
         </div>
@@ -903,43 +1047,157 @@ function MonthPage({
   );
 }
 
-function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [kind, setKind] = useState<FlowKind>("out");
-  const [title, setTitle] = useState("");
-  const [selectedIconId, setSelectedIconId] = useState<string | undefined>();
-  const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(todayIso());
-  const [recurring, setRecurring] = useState(false);
+function EntrySheet({
+  movement,
+  settings,
+  onClose,
+  onSaved
+}: {
+  movement?: EntrySheetRecord;
+  settings: AppSettings;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const sourceRecord = movement?.record;
+  const editing = Boolean(movement);
+  const [kind, setKind] = useState<FlowKind>(sourceRecord?.kind ?? "out");
+  const [entryMode, setEntryMode] = useState<EntryMode>(movement?.source === "recurrence" ? "recurring" : "single");
+  const [title, setTitle] = useState(sourceRecord?.title ?? "");
+  const [selectedIconId, setSelectedIconId] = useState<string | undefined>(sourceRecord?.iconId);
+  const [amountDigits, setAmountDigits] = useState(sourceRecord ? amountToCurrencyDigits(sourceRecord.amount) : "");
+  const [date, setDate] = useState(movement?.source === "entry" ? movement.record.date : movement?.occurrenceDate ?? todayIso());
+  const [installmentCountText, setInstallmentCountText] = useState("2");
+  const [recurrenceScope, setRecurrenceScope] = useState<RecurrenceEditScope>("future");
   const selectedIcon = findIconById(selectedIconId);
   const iconSuggestions = useMemo(
     () => (selectedIcon ? [] : searchIconOptions(title, selectedIconId).slice(0, 5)),
     [selectedIcon, selectedIconId, title]
   );
   const effectiveTitle = selectedIcon?.label ?? title.trim();
+  const editingRecurrence = movement?.source === "recurrence";
+  const totalCents = Number(amountDigits || "0");
+  const amount = currencyDigitsToAmount(amountDigits);
+  const amountDisplay = formatCurrencyDigits(amountDigits);
+  const installmentCount = parseInstallmentCount(installmentCountText);
+  const installmentPreview = entryMode === "installment" ? buildInstallmentPreview(totalCents, installmentCount) : "";
+  const baseMonth = monthLabel(monthKey(settings.openingDate));
+  const isBeforeOpeningDate = Boolean(date && date < settings.openingDate);
+  const dateBaseNote = `${dayLabel(settings.openingDate)} (${baseMonth})`;
+  const dateWarning = isBeforeOpeningDate
+    ? entryMode === "installment"
+      ? `As parcelas antes da data base ${dateBaseNote} serão ignoradas no saldo. Só os lançamentos a partir da data base entram no cálculo.`
+      : entryMode === "recurring"
+      ? `Esse lançamento começa antes da data base ${dateBaseNote}. Os meses anteriores serão ignorados no saldo. Só os lançamentos a partir da data base entram no cálculo.`
+      : `Esse lançamento está antes da data base ${dateBaseNote} e será ignorado no saldo.`
+    : "";
+
+  function handleEntryModeChange(mode: EntryMode) {
+    setEntryMode(mode);
+    if (mode === "installment") setKind("out");
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const value = Number(amount);
-    if (!effectiveTitle || !value || !date) return;
+    if (!effectiveTitle || !amount || !date) return;
 
-    if (recurring) {
+    if (movement?.source === "entry") {
+      await saveRecord("entries", {
+        ...movement.record,
+        kind,
+        title: effectiveTitle,
+        iconId: selectedIconId,
+        amount,
+        date
+      });
+    } else if (movement?.source === "recurrence") {
+      if (recurrenceScope === "this") {
+        await saveRecord("entries", {
+          ...createBase("entry"),
+          kind,
+          title: effectiveTitle,
+          iconId: selectedIconId,
+          amount,
+          date,
+          recurrenceId: movement.record.id
+        } as Entry);
+      } else if (recurrenceScope === "future") {
+        const newStartsOn = date;
+        if (newStartsOn <= movement.record.startsOn) {
+          await saveRecord("recurrences", {
+            ...movement.record,
+            kind,
+            title: effectiveTitle,
+            iconId: selectedIconId,
+            amount,
+            dayOfMonth: Number(newStartsOn.slice(8, 10)),
+            startsOn: newStartsOn,
+            active: true
+          });
+        } else {
+          await saveRecord("recurrences", {
+            ...movement.record,
+            endsOn: previousDay(newStartsOn)
+          });
+          await saveRecord("recurrences", {
+            ...createBase("recurrence"),
+            kind,
+            title: effectiveTitle,
+            iconId: selectedIconId,
+            amount,
+            dayOfMonth: Number(newStartsOn.slice(8, 10)),
+            startsOn: newStartsOn,
+            endsOn: movement.record.endsOn && movement.record.endsOn >= newStartsOn ? movement.record.endsOn : undefined,
+            active: true
+          } as Recurrence);
+        }
+      } else {
+        await saveRecord("recurrences", {
+          ...movement.record,
+          kind,
+          title: effectiveTitle,
+          iconId: selectedIconId,
+          amount,
+          dayOfMonth: Number(date.slice(8, 10)),
+          active: true
+        });
+      }
+    } else if (entryMode === "recurring") {
       await saveRecord("recurrences", {
         ...createBase("recurrence"),
         kind,
         title: effectiveTitle,
         iconId: selectedIconId,
-        amount: value,
+        amount,
         dayOfMonth: Number(date.slice(8, 10)),
         startsOn: date,
         active: true
       } as Recurrence);
+    } else if (entryMode === "installment") {
+      const installmentPlan = buildInstallmentPlan({
+        firstDate: date,
+        installments: installmentCount,
+        title: effectiveTitle,
+        totalCents
+      });
+      if (installmentPlan.length === 0) return;
+
+      for (const installment of installmentPlan) {
+        await saveRecord("entries", {
+          ...createBase("entry"),
+          kind,
+          title: installment.title,
+          iconId: selectedIconId,
+          amount: installment.amount,
+          date: installment.date
+        } as Entry);
+      }
     } else {
       await saveRecord("entries", {
         ...createBase("entry"),
         kind,
         title: effectiveTitle,
         iconId: selectedIconId,
-        amount: value,
+        amount,
         date
       } as Entry);
     }
@@ -949,7 +1207,7 @@ function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   }
 
   return (
-    <BottomSheet title="Novo lançamento" onClose={onClose}>
+    <BottomSheet title={editingRecurrence ? "Editar recorrência" : editing ? "Editar lançamento" : "Novo lançamento"} onClose={onClose}>
       <form className="sheet-form" onSubmit={handleSubmit}>
         <div className="segmented">
           <button className={kind === "out" ? "active out" : ""} type="button" onClick={() => setKind("out")}>
@@ -959,6 +1217,20 @@ function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
             Entrada
           </button>
         </div>
+
+        {!editing && (
+          <div className="mode-segmented" role="group" aria-label="Tipo de lançamento">
+            <button className={entryMode === "single" ? "active" : ""} type="button" onClick={() => handleEntryModeChange("single")}>
+              Avulso
+            </button>
+            <button className={entryMode === "recurring" ? "active" : ""} type="button" onClick={() => handleEntryModeChange("recurring")}>
+              Recorrente
+            </button>
+            <button className={entryMode === "installment" ? "active" : ""} type="button" onClick={() => handleEntryModeChange("installment")}>
+              Parcelado
+            </button>
+          </div>
+        )}
 
         <label>
           Título
@@ -997,20 +1269,106 @@ function EntrySheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
         )}
 
         <label>
-          Valor
-          <input value={amount} onChange={(event) => setAmount(event.target.value)} type="number" inputMode="decimal" step="0.01" min="0.01" required />
+          {entryMode === "installment" ? "Valor total" : "Valor"}
+          <span className="currency-input">
+            <span className="currency-prefix" aria-hidden="true">
+              R$
+            </span>
+            <input
+              value={amountDisplay}
+              onChange={(event) => setAmountDigits(extractCurrencyDigits(event.target.value))}
+              type="text"
+              inputMode="decimal"
+              placeholder="0,00"
+              autoComplete="off"
+              required
+            />
+          </span>
         </label>
+        {entryMode === "installment" && (
+          <>
+            <label>
+              Parcelas
+              <input
+                value={installmentCountText}
+                onChange={(event) => setInstallmentCountText(event.target.value.replace(/\D/g, "").slice(0, 3))}
+                type="number"
+                inputMode="numeric"
+                min="2"
+                max="120"
+                required
+              />
+            </label>
+            {installmentPreview && (
+              <div className="installment-preview" role="status">
+                {installmentPreview}
+              </div>
+            )}
+          </>
+        )}
         <label>
-          Data
+          {entryMode === "installment" ? "Primeira parcela" : "Data"}
           <input value={date} onChange={(event) => setDate(event.target.value)} type="date" required />
         </label>
-        <label className="switch-row">
-          <span>
-            Recorrente
-            <small>Repete todo mês no mesmo dia</small>
-          </span>
-          <input checked={recurring} onChange={(event) => setRecurring(event.target.checked)} type="checkbox" />
-        </label>
+        {dateWarning && (
+          <div className="date-warning" role="status">
+            {dateWarning}
+          </div>
+        )}
+        {editing && (
+          <label className="switch-row">
+            <span>
+              Recorrente
+              <small>Repete todo mês no mesmo dia</small>
+            </span>
+            <input checked={editingRecurrence} type="checkbox" disabled />
+          </label>
+        )}
+
+        {editingRecurrence && (
+          <fieldset className="scope-group">
+            <legend>Aplicar alteração</legend>
+            <label className={recurrenceScope === "this" ? "active" : ""}>
+              <input
+                type="radio"
+                name="recurrence-scope"
+                value="this"
+                checked={recurrenceScope === "this"}
+                onChange={() => setRecurrenceScope("this")}
+              />
+              <span>
+                Só este mês
+                <small>Cria uma exceção para {monthLabel(monthKey(movement.occurrenceDate))}</small>
+              </span>
+            </label>
+            <label className={recurrenceScope === "future" ? "active" : ""}>
+              <input
+                type="radio"
+                name="recurrence-scope"
+                value="future"
+                checked={recurrenceScope === "future"}
+                onChange={() => setRecurrenceScope("future")}
+              />
+              <span>
+                A partir deste mês
+                <small>Mantém o histórico e usa o novo valor daqui em diante</small>
+              </span>
+            </label>
+            <label className={recurrenceScope === "all" ? "active" : ""}>
+              <input
+                type="radio"
+                name="recurrence-scope"
+                value="all"
+                checked={recurrenceScope === "all"}
+                onChange={() => setRecurrenceScope("all")}
+              />
+              <span>
+                Toda a recorrência
+                <small>Altera meses anteriores e futuros dessa regra</small>
+              </span>
+            </label>
+          </fieldset>
+        )}
 
         <button className="filled-button" type="submit">
           Salvar
@@ -1054,6 +1412,36 @@ function BalanceSheet({ settings, onClose, onSaved }: { settings: AppSettings; o
   );
 }
 
+function DeleteMovementSheet({
+  item,
+  onCancel,
+  onConfirm
+}: {
+  item: MovementTarget;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const label = item.source === "recurrence" ? "esta recorrência" : "este lançamento";
+
+  return (
+    <BottomSheet title="Excluir movimento" onClose={onCancel}>
+      <div className="confirm-sheet">
+        <p>Excluir {label}?</p>
+        <strong>{item.title}</strong>
+        <div className="confirm-actions">
+          <button className="tonal-button" type="button" onClick={onCancel}>
+            Cancelar
+          </button>
+          <button className="danger-button" type="button" onClick={onConfirm}>
+            <UiIcon name="delete" />
+            Excluir
+          </button>
+        </div>
+      </div>
+    </BottomSheet>
+  );
+}
+
 function BottomSheet({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   return (
     <div className="sheet-backdrop">
@@ -1091,22 +1479,134 @@ function SummaryLine({ label, value, strong }: { label: string; value: number; s
 
 function TimelineRow({
   item,
-  consolidated
+  consolidated,
+  onEdit,
+  onDelete
 }: {
-  item: MonthSnapshot["items"][number];
+  item: TimelineItem;
   consolidated: boolean;
+  onEdit: (item: TimelineItem) => void;
+  onDelete: (item: TimelineItem) => void;
 }) {
+  const [offset, setOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const offsetRef = useRef(0);
+  const gestureRef = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    swiping: boolean;
+    cancelled: boolean;
+  } | null>(null);
   const status = consolidated && item.future ? "Consolidado" : item.recurring ? "Recorrente" : item.future ? "Previsto" : "Lançado";
+  const swipeStyle = { "--swipe-offset": `${offset}px` } as CSSProperties;
+  const swipeClassName = [
+    "swipe-row",
+    dragging ? "dragging" : "",
+    offset > 0 ? "reveal-edit" : "",
+    offset < 0 ? "reveal-delete" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  function applyOffset(value: number) {
+    offsetRef.current = value;
+    setOffset(value);
+  }
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+
+    gestureRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      swiping: false,
+      cancelled: false
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId || gesture.cancelled) return;
+
+    const diffX = event.clientX - gesture.x;
+    const diffY = event.clientY - gesture.y;
+
+    if (!gesture.swiping) {
+      if (Math.abs(diffX) < 8 && Math.abs(diffY) < 8) return;
+      if (Math.abs(diffY) > Math.abs(diffX)) {
+        gesture.cancelled = true;
+        applyOffset(0);
+        return;
+      }
+
+      gesture.swiping = true;
+      setDragging(true);
+    }
+
+    event.preventDefault();
+    applyOffset(clamp(diffX, -SWIPE_ACTION_WIDTH, SWIPE_ACTION_WIDTH));
+  }
+
+  function finishSwipe(event: ReactPointerEvent<HTMLDivElement>) {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    gestureRef.current = null;
+    setDragging(false);
+
+    const finalOffset = offsetRef.current;
+    applyOffset(0);
+
+    if (!gesture.swiping) return;
+    if (finalOffset >= SWIPE_TRIGGER_DISTANCE) onEdit(item);
+    if (finalOffset <= -SWIPE_TRIGGER_DISTANCE) onDelete(item);
+  }
+
+  function cancelSwipe(event: ReactPointerEvent<HTMLDivElement>) {
+    const gesture = gestureRef.current;
+    if (gesture && event.currentTarget.hasPointerCapture(gesture.pointerId)) {
+      event.currentTarget.releasePointerCapture(gesture.pointerId);
+    }
+
+    gestureRef.current = null;
+    setDragging(false);
+    applyOffset(0);
+  }
 
   return (
-    <div className={`timeline-row ${item.kind} ${item.future && !consolidated ? "future" : ""}`} role="listitem">
-      <TimelineIcon item={item} />
-      <div className="timeline-text">
-        <strong>{item.title}</strong>
-        <span>{dayLabel(item.date)} · {status}</span>
+    <div
+      className={swipeClassName}
+      style={swipeStyle}
+      role="listitem"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={finishSwipe}
+      onPointerCancel={cancelSwipe}
+    >
+      <div className="swipe-action swipe-action-edit" aria-hidden="true">
+        <UiIcon name="edit" />
+        <span>Editar</span>
       </div>
-      <div className={item.kind === "in" ? "amount money-in" : "amount money-out"}>
-        {item.kind === "in" ? "+" : "-"} {formatMoney(item.amount)}
+      <div className="swipe-action swipe-action-delete" aria-hidden="true">
+        <UiIcon name="delete" />
+        <span>Excluir</span>
+      </div>
+      <div className={`timeline-row ${item.kind} ${item.future && !consolidated ? "future" : ""}`}>
+        <TimelineIcon item={item} />
+        <div className="timeline-text">
+          <strong>{item.title}</strong>
+          <span>{dayLabel(item.date)} · {status}</span>
+        </div>
+        <div className={item.kind === "in" ? "amount money-in" : "amount money-out"}>
+          {item.kind === "in" ? "+" : "-"} {formatMoney(item.amount)}
+        </div>
       </div>
     </div>
   );

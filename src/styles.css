@@ -1009,27 +1009,87 @@ textarea {
   display: none;
 }
 
+.swipe-row {
+  position: relative;
+  overflow: hidden;
+  min-height: 80px;
+  border-radius: var(--shape-extra-small);
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.swipe-row:first-child {
+  border-radius: var(--shape-large) var(--shape-large) var(--shape-extra-small) var(--shape-extra-small);
+}
+
+.swipe-row:last-child {
+  border-radius: var(--shape-extra-small) var(--shape-extra-small) var(--shape-large) var(--shape-large);
+}
+
+.swipe-row:only-child {
+  border-radius: var(--shape-large);
+}
+
+.swipe-action {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 0;
+  display: flex;
+  width: 108px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity var(--duration-short) var(--easing-standard);
+}
+
+.swipe-action .ui-icon {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.3;
+}
+
+.swipe-action-edit {
+  left: 0;
+  justify-content: flex-start;
+  background: var(--blue);
+}
+
+.swipe-action-delete {
+  right: 0;
+  justify-content: flex-end;
+  background: var(--red);
+}
+
+.swipe-row.reveal-edit .swipe-action-edit,
+.swipe-row.reveal-delete .swipe-action-delete {
+  opacity: 1;
+  visibility: visible;
+}
+
 .timeline-row {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr) auto;
   gap: 14px;
   align-items: center;
   min-height: 80px;
-  border-radius: var(--shape-extra-small);
+  border-radius: inherit;
   padding: 12px 16px;
   background: var(--timeline-row);
+  transform: translateX(var(--swipe-offset, 0));
+  transition: transform var(--duration-short) var(--easing-standard);
 }
 
-.timeline-row:first-child {
-  border-radius: var(--shape-large) var(--shape-large) var(--shape-extra-small) var(--shape-extra-small);
-}
-
-.timeline-row:last-child {
-  border-radius: var(--shape-extra-small) var(--shape-extra-small) var(--shape-large) var(--shape-large);
-}
-
-.timeline-row:only-child {
-  border-radius: var(--shape-large);
+.swipe-row.dragging .timeline-row {
+  transition: none;
 }
 
 .timeline-row.future {
@@ -1162,7 +1222,8 @@ textarea {
   left: 0;
   z-index: 10;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr);
+  column-gap: 12px;
   width: min(100%, 520px);
   min-height: 88px;
   margin: 0 auto;
@@ -1176,6 +1237,7 @@ textarea {
   display: grid;
   gap: 4px;
   place-items: center;
+  min-width: 0;
   border-radius: var(--shape-small);
   padding: 0;
   background: transparent;
@@ -1220,10 +1282,10 @@ textarea {
   justify-self: center;
   align-self: center;
   gap: 0;
-  width: min(126px, 100%);
-  min-height: 48px;
-  border-radius: var(--shape-full);
-  padding: 0 18px;
+  width: 64px;
+  min-height: 56px;
+  border-radius: var(--shape-large);
+  padding: 0 10px;
   background: var(--primary);
   color: var(--on-primary);
   font-weight: 700;
@@ -1340,6 +1402,63 @@ input:invalid {
   border-color: var(--red);
 }
 
+.currency-input {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  min-height: 56px;
+  border: 1px solid var(--outline);
+  border-radius: var(--shape-small);
+  background: var(--surface-container-lowest);
+  transition:
+    border-color var(--duration-short) var(--easing-standard),
+    background var(--duration-short) var(--easing-standard);
+}
+
+.currency-input:focus-within {
+  border-color: var(--primary);
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.currency-input:has(input:invalid) {
+  border-color: var(--red);
+}
+
+.currency-prefix {
+  padding-left: 14px;
+  color: var(--on-surface-variant);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.currency-input input {
+  min-height: 54px;
+  border: 0;
+  border-radius: 0 var(--shape-small) var(--shape-small) 0;
+  padding: 0 14px 0 8px;
+  background: transparent;
+  text-align: right;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.currency-input input:focus-visible {
+  outline: 0;
+}
+
+.date-warning {
+  border: 1px solid color-mix(in srgb, var(--amber) 52%, transparent);
+  border-radius: var(--shape-small);
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--amber-container) 36%, var(--surface-container-lowest));
+  color: var(--on-surface);
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.35rem;
+}
+
 .segmented {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1375,6 +1494,41 @@ input:invalid {
 .segmented button.active.out {
   background: var(--red-container);
   color: var(--red);
+}
+
+.mode-segmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  border: 1px solid var(--outline);
+  border-radius: var(--shape-large);
+  padding: 4px;
+  background: var(--surface-container-lowest);
+}
+
+.mode-segmented button {
+  min-width: 0;
+  min-height: 42px;
+  border-radius: var(--shape-medium);
+  padding: 0 8px;
+  background: transparent;
+  color: var(--on-surface-variant);
+  font-size: 0.85rem;
+  font-weight: 800;
+  transition:
+    background var(--duration-short) var(--easing-standard),
+    color var(--duration-short) var(--easing-standard);
+}
+
+.mode-segmented button:hover,
+.mode-segmented button:focus-visible {
+  background: var(--state-hover);
+  outline: 0;
+}
+
+.mode-segmented button.active {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
 }
 
 .icon-picker {
@@ -1534,8 +1688,119 @@ input:invalid {
   accent-color: var(--primary);
 }
 
+.installment-preview {
+  border-radius: var(--shape-small);
+  padding: 10px 12px;
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.25rem;
+}
+
+.scope-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.scope-group legend {
+  margin-bottom: 2px;
+  color: var(--on-surface-variant);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.scope-group label {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 64px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--shape-large);
+  padding: 10px 14px;
+  background: var(--surface-container-lowest);
+  transition:
+    border-color var(--duration-short) var(--easing-standard),
+    background var(--duration-short) var(--easing-standard);
+}
+
+.scope-group label.active {
+  border-color: var(--primary);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+
+.scope-group input {
+  width: 20px;
+  min-height: 20px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.scope-group span,
+.scope-group small {
+  display: block;
+}
+
+.scope-group span {
+  min-width: 0;
+  color: var(--on-surface);
+  font-size: 0.94rem;
+  font-weight: 800;
+  line-height: 1.25rem;
+}
+
+.scope-group small {
+  margin-top: 2px;
+  color: var(--on-surface-variant);
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.15rem;
+}
+
+.scope-group label.active span,
+.scope-group label.active small {
+  color: var(--on-primary-container);
+}
+
+.confirm-sheet {
+  display: grid;
+  gap: 14px;
+}
+
+.confirm-sheet p {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 1rem;
+  line-height: 1.45rem;
+}
+
+.confirm-sheet strong {
+  overflow-wrap: anywhere;
+  color: var(--on-surface);
+  font-size: 1.1rem;
+  line-height: 1.45rem;
+}
+
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+
 .filled-button,
-.tonal-button {
+.tonal-button,
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: 48px;
   border-radius: var(--shape-full);
   padding: 0 18px;
@@ -1556,21 +1821,35 @@ input:invalid {
   color: var(--on-primary-container);
 }
 
+.danger-button {
+  background: var(--red);
+  color: var(--on-error);
+}
+
+.danger-button .ui-icon {
+  width: 20px;
+  height: 20px;
+}
+
 .filled-button:hover,
 .filled-button:focus-visible,
 .tonal-button:hover,
-.tonal-button:focus-visible {
+.tonal-button:focus-visible,
+.danger-button:hover,
+.danger-button:focus-visible {
   box-shadow: var(--elevation-1);
   outline: 0;
 }
 
 .filled-button:active,
-.tonal-button:active {
+.tonal-button:active,
+.danger-button:active {
   box-shadow: var(--elevation-0);
 }
 
 .filled-button:disabled,
-.tonal-button:disabled {
+.tonal-button:disabled,
+.danger-button:disabled {
   cursor: default;
   opacity: 0.64;
   box-shadow: none;
