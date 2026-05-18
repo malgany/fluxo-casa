@@ -4,8 +4,9 @@ import { db, getDirtyChanges, saveRecord } from "./db";
 import { syncNow } from "./sync";
 import type { Entry } from "../domain/types";
 
-const { supabaseMock, upserts } = vi.hoisted(() => ({
+const { supabaseMock, upserts, upsertError } = vi.hoisted(() => ({
   upserts: [] as Array<{ table: string; rows: unknown[] }>,
+  upsertError: { current: null as null | { message: string } },
   supabaseMock: {
     auth: {
       getSession: vi.fn()
@@ -50,6 +51,7 @@ describe("syncNow", () => {
     vi.restoreAllMocks();
     vi.stubGlobal("localStorage", createMemoryStorage());
     upserts.length = 0;
+    upsertError.current = null;
     supabaseMock.auth.getSession.mockResolvedValue({ data: { session: { access_token: "token" } } });
     supabaseMock.from.mockImplementation((table: string) => createTableMock(table));
   });
@@ -67,6 +69,18 @@ describe("syncNow", () => {
     expect((await getDirtyChanges("household_2")).entries ?? []).toHaveLength(1);
     expect(upserts.find((item) => item.table === "entries")?.rows).toHaveLength(1);
   });
+
+  it("does not expose technical Supabase errors to the user", async () => {
+    await saveRecord("entries", localEntry);
+    upsertError.current = { message: 'new row violates row-level security policy for table "entries"' };
+
+    const result = await syncNow("household_1");
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toBe("Não foi possível sincronizar agora. Seus dados ficam salvos neste aparelho e serão enviados quando o serviço estiver disponível.");
+    expect(result.message).not.toContain("row-level security");
+    expect(result.message).not.toContain("entries");
+  });
 });
 
 function createTableMock(table: string) {
@@ -74,6 +88,7 @@ function createTableMock(table: string) {
     select: () => createSelectQuery(table),
     upsert: (rows: unknown[]) => {
       upserts.push({ table, rows });
+      if (upsertError.current) return Promise.resolve({ data: null, error: upsertError.current });
       return Promise.resolve({ data: rows, error: null });
     }
   };

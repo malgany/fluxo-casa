@@ -120,13 +120,35 @@ async function check<T>(request: PromiseLike<{ error: SupabaseErrorLike | Error 
 }
 
 function syncErrorMessage(error: unknown): string {
+  const message = technicalErrorMessage(error);
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("failed to fetch") || normalized.includes("network")) {
+    return "Não foi possível conectar agora. Seus dados ficam salvos neste aparelho e a sincronização será tentada novamente.";
+  }
+  if (
+    normalized.includes("row-level security") ||
+    normalized.includes("permission denied") ||
+    normalized.includes("violates") ||
+    normalized.includes("schema cache") ||
+    normalized.includes("could not find") ||
+    normalized.includes("relation") ||
+    normalized.includes("function")
+  ) {
+    return "Não foi possível sincronizar agora. Seus dados ficam salvos neste aparelho e serão enviados quando o serviço estiver disponível.";
+  }
+
+  return "Não foi possível sincronizar agora. Seus dados ficam salvos neste aparelho e a sincronização será tentada novamente.";
+}
+
+function technicalErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) return error.message;
   if (typeof error === "string" && error.trim()) return error;
   if (error && typeof error === "object" && "message" in error) {
     const message = (error as SupabaseErrorLike).message;
     if (typeof message === "string" && message.trim()) return message;
   }
-  return "Sincronização falhou.";
+  return "";
 }
 
 function getLastSyncAt(householdId: string): string | undefined {

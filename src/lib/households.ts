@@ -44,7 +44,7 @@ export async function loadHouseholdContext(session: Session): Promise<HouseholdC
   const supabase = getSupabaseClient();
 
   const { error: invitationError } = await supabase.rpc("accept_pending_invitations");
-  if (invitationError) throw invitationError;
+  if (invitationError) throw new Error(friendlyHouseholdError(invitationError, "Não foi possível verificar convites agora."));
 
   const households = await fetchHouseholds();
   await saveHouseholdsLocally(households);
@@ -82,7 +82,7 @@ export async function loadCachedHouseholds(): Promise<HouseholdSummary[]> {
 export async function createHousehold(name: string): Promise<HouseholdContext> {
   const supabase = getSupabaseClient();
   const { error } = await supabase.rpc("create_household", { household_name: name.trim() || "Minha conta" });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyHouseholdError(error, "Não foi possível criar a conta."));
 
   const households = await fetchHouseholds();
   await saveHouseholdsLocally(households);
@@ -102,7 +102,7 @@ export async function updateHouseholdName(householdId: string, name: string): Pr
     target_household_id: householdId,
     household_name: cleanName
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyHouseholdError(error, "Não foi possível salvar a conta."));
 
   const households = await fetchHouseholds();
   await saveHouseholdsLocally(households);
@@ -119,7 +119,7 @@ export async function deleteHousehold(householdId: string): Promise<HouseholdCon
   const { error } = await getSupabaseClient().rpc("delete_household", {
     target_household_id: householdId
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyHouseholdError(error, "Não foi possível excluir a conta."));
 
   const now = nowIso();
   await db.households.update(householdId, {
@@ -144,7 +144,7 @@ export async function removeHouseholdMember(householdId: string, memberId: strin
   const { error } = await getSupabaseClient().rpc("remove_household_member", {
     target_member_id: memberId
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyHouseholdError(error, "Não foi possível remover o membro."));
 
   await refreshMembers([householdId]);
   return db.householdMembers.where("householdId").equals(householdId).toArray();
@@ -169,7 +169,7 @@ export async function inviteHouseholdMember(householdId: string, email: string, 
 
   if (!response.ok) {
     const error = (await response.json().catch(() => ({ message: "Não foi possível enviar o convite." }))) as { message?: string };
-    throw new Error(error.message || "Não foi possível enviar o convite.");
+    throw new Error(friendlyHouseholdError(error, "Não foi possível enviar o convite."));
   }
 }
 
@@ -180,7 +180,7 @@ export async function getHouseholdMembers(householdId: string): Promise<Househol
 
 async function fetchHouseholds(): Promise<HouseholdSummary[]> {
   const { data, error } = await getSupabaseClient().rpc("get_my_households");
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyHouseholdError(error, "Não foi possível carregar suas contas."));
 
   return ((data ?? []) as HouseholdRow[]).map((row) => ({
     id: row.id,
@@ -196,7 +196,7 @@ async function refreshMembers(householdIds: string[]): Promise<void> {
   if (householdIds.length === 0) return;
 
   const { data, error } = await getSupabaseClient().from("household_members").select("*").in("household_id", householdIds);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyHouseholdError(error, "Não foi possível carregar os membros."));
 
   await db.householdMembers.bulkPut(((data ?? []) as HouseholdMemberRow[]).map(memberFromRow));
 }
@@ -237,4 +237,34 @@ function memberFromRow(row: HouseholdMemberRow): HouseholdMember {
     deletedAt: row.deleted_at ?? undefined,
     syncStatus: "synced"
   };
+}
+
+function friendlyHouseholdError(error: unknown, fallback: string): string {
+  const message = technicalErrorMessage(error);
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("failed to fetch") || normalized.includes("network")) {
+    return "Não foi possível conectar agora. Verifique sua internet e tente novamente.";
+  }
+  if (normalized.includes("permission denied") || normalized.includes("row-level security") || normalized.includes("violates")) {
+    return "Você não tem permissão para fazer essa ação nesta conta.";
+  }
+  if (normalized.includes("schema cache") || normalized.includes("could not find") || normalized.includes("function") || normalized.includes("relation")) {
+    return "O serviço ainda está atualizando. Tente novamente em alguns instantes.";
+  }
+  if (normalized.includes("already") || normalized.includes("duplicate") || normalized.includes("unique")) {
+    return "Essa informação já está cadastrada.";
+  }
+
+  return fallback;
+}
+
+function technicalErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return "";
 }
