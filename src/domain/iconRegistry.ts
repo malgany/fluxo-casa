@@ -55,6 +55,78 @@ export const serviceIcons = [
     aliases: ["farmacia", "remedio", "medicamento", "saude", "drogaria"]
   },
   {
+    id: "salario",
+    label: "Salario",
+    src: "/service-icons/salario.svg",
+    aliases: ["salario", "renda", "pagamento", "ordenado", "recebimento", "trabalho"]
+  },
+  {
+    id: "gasolina",
+    label: "Gasolina",
+    src: "/service-icons/gasolina.svg",
+    aliases: ["gasolina", "combustivel", "posto", "abastecer", "etanol", "diesel", "carro"]
+  },
+  {
+    id: "lanche",
+    label: "Lanche",
+    src: "/service-icons/lanche.svg",
+    aliases: ["lanche", "pizza", "hamburguer", "batata", "refrigerante", "besteira", "bobeira", "comida"]
+  },
+  {
+    id: "aluguel",
+    label: "Aluguel",
+    src: "/service-icons/aluguel.svg",
+    aliases: ["aluguel", "casa", "apartamento", "moradia", "condominio", "imovel"]
+  },
+  {
+    id: "escola",
+    label: "Escola",
+    src: "/service-icons/escola.svg",
+    aliases: ["escola", "faculdade", "curso", "educacao", "material escolar", "estudo"]
+  },
+  {
+    id: "pet",
+    label: "Pet",
+    src: "/service-icons/pet.svg",
+    aliases: ["pet", "animal", "cachorro", "gato", "racao", "veterinario"]
+  },
+  {
+    id: "assinatura",
+    label: "Assinatura",
+    src: "/service-icons/assinatura.svg",
+    aliases: ["assinatura", "mensalidade", "recorrente", "plano", "servico", "subscription"]
+  },
+  {
+    id: "presente",
+    label: "Presente",
+    src: "/service-icons/presente.svg",
+    aliases: ["presente", "gift", "aniversario", "comemoracao", "lembranca"]
+  },
+  {
+    id: "manutencao",
+    label: "Manutencao",
+    src: "/service-icons/manutencao.svg",
+    aliases: ["manutencao", "conserto", "reparo", "ferramenta", "obra", "oficina"]
+  },
+  {
+    id: "seguro",
+    label: "Seguro",
+    src: "/service-icons/seguro.svg",
+    aliases: ["seguro", "protecao", "apolice", "garantia", "plano"]
+  },
+  {
+    id: "viagem",
+    label: "Viagem",
+    src: "/service-icons/viagem.svg",
+    aliases: ["viagem", "passagem", "hotel", "ferias", "mala", "aviao", "turismo"]
+  },
+  {
+    id: "impostos",
+    label: "Impostos",
+    src: "/service-icons/impostos.svg",
+    aliases: ["impostos", "taxa", "tributo", "ipva", "iptu", "ir", "receita"]
+  },
+  {
     id: "energisa",
     label: "Energisa",
     src: "/service-icons/energisa.svg",
