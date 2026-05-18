@@ -38,7 +38,7 @@ type View = "home" | "timeline";
 type Sheet = "entry" | "balance" | null;
 type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
 type ThemeMode = "light" | "dark";
-type MaterialIconName = "wallet" | "sync" | "update" | "export" | "import" | "add";
+type MaterialIconName = "wallet" | "update" | "export" | "import" | "add";
 type UiIconName = "home" | "list" | "more" | "close" | "delete" | "edit" | "external" | "moon" | "sun" | "lock" | "users" | "info" | "warning";
 type AuthMode = "sign-in" | "sign-up" | "reset";
 type DialogTone = "info" | "error";
@@ -61,7 +61,6 @@ const SWIPE_TRIGGER_DISTANCE = 72;
 const INSTALLMENT_COUNT_OPTIONS = Array.from({ length: MAX_INSTALLMENT_COUNT - 1 }, (_, index) => index + 2);
 const MATERIAL_ICON_SRC: Record<MaterialIconName, string> = {
   wallet: "/material-symbols/account_balance_wallet.svg",
-  sync: "/material-symbols/sync.svg",
   update: "/material-symbols/update.svg",
   export: "/material-symbols/file_download.svg",
   import: "/material-symbols/file_upload.svg",
@@ -242,6 +241,8 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
   const screenHousehold = activeHouseholdScreen?.householdId
     ? households.find((household) => household.id === activeHouseholdScreen.householdId)
     : undefined;
+  const selectedHousehold = selectedHouseholdId ? households.find((household) => household.id === selectedHouseholdId) : undefined;
+  const canManageSelectedHousehold = canManageHousehold(selectedHousehold);
   const headerTitle = activeHouseholdScreen
     ? activeHouseholdScreen.mode === "edit"
       ? "Editar conta"
@@ -300,11 +301,6 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
     document.addEventListener("pointerdown", closeMenu);
     return () => document.removeEventListener("pointerdown", closeMenu);
   }, [menuOpen]);
-
-  async function handleSync() {
-    await runSync(true);
-    setMenuOpen(false);
-  }
 
   async function handleCheckUpdates() {
     setMenuOpen(false);
@@ -451,7 +447,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
   }
 
   async function handleExport() {
-    if (!selectedHouseholdId) return;
+    if (!selectedHouseholdId || !canManageSelectedHousehold) return;
     const backup = await exportBackup(selectedHouseholdId);
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -464,7 +460,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
   }
 
   async function handleImport(file?: File) {
-    if (!file || !selectedHouseholdId) return;
+    if (!file || !selectedHouseholdId || !canManageSelectedHousehold) return;
     await importBackup(JSON.parse(await file.text()), selectedHouseholdId);
     setMessage("Backup importado.");
     setMenuOpen(false);
@@ -592,15 +588,11 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
               <UiIcon name="users" />
               <span>Contas e membros</span>
             </button>
-            {insideSelectedHousehold && (
+            {insideSelectedHousehold && canManageSelectedHousehold && (
               <>
                 <button role="menuitem" type="button" onClick={() => { setSheet("balance"); setMenuOpen(false); }}>
                   <MaterialIcon name="wallet" className="menu-icon" />
                   <span>Ajustar saldo inicial</span>
-                </button>
-                <button role="menuitem" type="button" onClick={handleSync}>
-                  <MaterialIcon name="sync" className="menu-icon" />
-                  <span>Sincronizar</span>
                 </button>
               </>
             )}
@@ -616,7 +608,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
               <UiIcon name="lock" />
               <span>Sair</span>
             </button>
-            {insideSelectedHousehold && (
+            {insideSelectedHousehold && canManageSelectedHousehold && (
               <>
                 <div className="menu-divider" role="separator" />
                 <button role="menuitem" type="button" onClick={handleExport}>
@@ -718,7 +710,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
           onSaved={handleEntrySaved}
         />
       )}
-      {sheet === "balance" && <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
+      {sheet === "balance" && canManageSelectedHousehold && <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
       {deletingHousehold && (
         <DeleteHouseholdSheet
           household={deletingHousehold}
@@ -1906,7 +1898,7 @@ function HouseholdManagerPage({
   const [householdName, setHouseholdName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<HouseholdRole>("member");
-  const canManageMembers = editingHousehold?.role === "owner" || editingHousehold?.role === "admin";
+  const canManageMembers = canManageHousehold(editingHousehold);
 
   useEffect(() => {
     setHouseholdName(screen.mode === "edit" ? editingHousehold?.name ?? "" : "");
@@ -1922,13 +1914,13 @@ function HouseholdManagerPage({
 
   function handleSave(event: FormEvent) {
     event.preventDefault();
-    if (!editingHousehold || !householdName.trim()) return;
+    if (!editingHousehold || !canManageHousehold(editingHousehold) || !householdName.trim()) return;
     onSave(editingHousehold.id, householdName);
   }
 
   function handleInvite(event: FormEvent) {
     event.preventDefault();
-    if (!editingHousehold || !inviteEmail.trim()) return;
+    if (!editingHousehold || !canManageMembers || !inviteEmail.trim()) return;
     onInvite(editingHousehold.id, inviteEmail, inviteRole);
     setInviteEmail("");
     setInviteRole("member");
@@ -1955,32 +1947,33 @@ function HouseholdManagerPage({
           {households.length === 0 ? (
             <div className="empty-state compact">Nenhuma conta cadastrada.</div>
           ) : (
-            households.map((household) => (
-              <article key={household.id} className={household.id === selectedHouseholdId ? "household-row active" : "household-row"} role="listitem">
-                <div className="household-row-main">
-                  <span>{household.name}</span>
-                  <small>{roleLabel(household.role)}</small>
-                </div>
-                <div className="household-row-actions">
-                  <button className="household-action-button" type="button" onClick={() => onEdit(household.id)} aria-label={`Editar ${household.name}`} title="Editar">
-                    <UiIcon name="edit" />
-                  </button>
-                  <button className="household-action-button" type="button" onClick={() => onSelect(household.id)} aria-label={`Acessar ${household.name}`} title="Acessar">
-                    <UiIcon name="external" />
-                  </button>
-                  <button
-                    className="household-action-button danger"
-                    type="button"
-                    onClick={() => onDelete(household)}
-                    aria-label={`Excluir ${household.name}`}
-                    title={household.role === "owner" ? "Excluir" : "Só o dono pode excluir"}
-                    disabled={household.role !== "owner"}
-                  >
-                    <UiIcon name="delete" />
-                  </button>
-                </div>
-              </article>
-            ))
+            households.map((household) => {
+              const canManage = canManageHousehold(household);
+
+              return (
+                <article key={household.id} className={household.id === selectedHouseholdId ? "household-row active" : "household-row"} role="listitem">
+                  <div className="household-row-main">
+                    <span>{household.name}</span>
+                    <small>{roleLabel(household.role)}</small>
+                  </div>
+                  <div className="household-row-actions">
+                    {canManage && (
+                      <button className="household-action-button" type="button" onClick={() => onEdit(household.id)} aria-label={`Editar ${household.name}`} title="Editar">
+                        <UiIcon name="edit" />
+                      </button>
+                    )}
+                    <button className="household-action-button" type="button" onClick={() => onSelect(household.id)} aria-label={`Acessar ${household.name}`} title="Acessar">
+                      <UiIcon name="external" />
+                    </button>
+                    {canManage && (
+                      <button className="household-action-button danger" type="button" onClick={() => onDelete(household)} aria-label={`Excluir ${household.name}`} title="Excluir">
+                        <UiIcon name="delete" />
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })
           )}
         </div>
       </div>
@@ -2016,6 +2009,26 @@ function HouseholdManagerPage({
           Contas
         </button>
         <div className="empty-state compact">Conta não encontrada.</div>
+      </div>
+    );
+  }
+
+  if (!canManageMembers) {
+    return (
+      <div className="household-manager">
+        <button className="breadcrumb-button" type="button" onClick={onBackToList}>
+          Contas
+        </button>
+        {identity}
+        <div className="household-form">
+          <div className="household-current">
+            <span>Conta</span>
+            <strong>{editingHousehold.name}</strong>
+          </div>
+          <button className="filled-button" type="button" onClick={() => onSelect(editingHousehold.id)}>
+            Acessar
+          </button>
+        </div>
       </div>
     );
   }
@@ -2100,6 +2113,10 @@ function roleLabel(role: HouseholdRole): string {
   if (role === "owner") return "Dono";
   if (role === "admin") return "Administrador";
   return "Membro";
+}
+
+function canManageHousehold(household?: Pick<HouseholdSummary, "role">): boolean {
+  return household?.role === "owner" || household?.role === "admin";
 }
 
 function BalanceSheet({ settings, onClose, onSaved }: { settings: AppSettings; onClose: () => void; onSaved: () => void }) {
