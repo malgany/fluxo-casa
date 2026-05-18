@@ -1868,6 +1868,48 @@ select {
   text-align: left;
 }
 
+.household-row-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.household-action-button {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: var(--shape-full);
+  padding: 0;
+  background: transparent;
+  color: var(--primary);
+}
+
+.household-action-button:hover,
+.household-action-button:focus-visible {
+  background: var(--state-primary-hover);
+  outline: 0;
+}
+
+.household-action-button.danger {
+  color: var(--red);
+}
+
+.household-action-button.danger:hover,
+.household-action-button.danger:focus-visible {
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+}
+
+.household-action-button:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.household-action-button:disabled:hover,
+.household-action-button:disabled:focus-visible {
+  background: transparent;
+}
+
 .household-row-main span {
   overflow: hidden;
   font-weight: 800;

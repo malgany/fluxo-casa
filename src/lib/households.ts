@@ -81,7 +81,7 @@ export async function loadCachedHouseholds(): Promise<HouseholdSummary[]> {
 
 export async function createHousehold(name: string): Promise<HouseholdContext> {
   const supabase = getSupabaseClient();
-  const { error } = await supabase.rpc("create_household", { household_name: name.trim() || "Minha casa" });
+  const { error } = await supabase.rpc("create_household", { household_name: name.trim() || "Minha conta" });
   if (error) throw new Error(error.message);
 
   const households = await fetchHouseholds();
@@ -96,7 +96,7 @@ export async function createHousehold(name: string): Promise<HouseholdContext> {
 
 export async function updateHouseholdName(householdId: string, name: string): Promise<HouseholdContext> {
   const cleanName = name.trim();
-  if (!householdId || !cleanName) throw new Error("Informe o nome da casa.");
+  if (!householdId || !cleanName) throw new Error("Informe o nome da conta.");
 
   const { error } = await getSupabaseClient().rpc("update_household_name", {
     target_household_id: householdId,
@@ -109,6 +109,31 @@ export async function updateHouseholdName(householdId: string, name: string): Pr
   await refreshMembers(households.map((household) => household.id));
 
   const selectedHouseholdId = households.some((household) => household.id === householdId) ? householdId : households[0]?.id ?? "";
+  setSelectedHouseholdId(selectedHouseholdId);
+  return { households, selectedHouseholdId };
+}
+
+export async function deleteHousehold(householdId: string): Promise<HouseholdContext> {
+  if (!householdId) throw new Error("Conta inválida.");
+
+  const { error } = await getSupabaseClient().rpc("delete_household", {
+    target_household_id: householdId
+  });
+  if (error) throw new Error(error.message);
+
+  const now = nowIso();
+  await db.households.update(householdId, {
+    deletedAt: now,
+    updatedAt: now,
+    syncStatus: "synced"
+  });
+
+  const households = await fetchHouseholds();
+  await saveHouseholdsLocally(households);
+  if (households.length > 0) await refreshMembers(households.map((household) => household.id));
+
+  const stored = getSelectedHouseholdId();
+  const selectedHouseholdId = households.some((household) => household.id === stored) ? stored : households[0]?.id ?? "";
   setSelectedHouseholdId(selectedHouseholdId);
   return { households, selectedHouseholdId };
 }

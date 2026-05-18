@@ -50,7 +50,7 @@ interface SettingsRow {
 const syncKeyPrefix = "fluxo-casa-supabase-sync-at";
 
 export async function syncNow(householdId: string): Promise<SyncResult> {
-  if (!householdId) return { ok: false, message: "Casa não selecionada." };
+  if (!householdId) return { ok: false, message: "Conta não selecionada." };
 
   try {
     const supabase = getSupabaseClient();

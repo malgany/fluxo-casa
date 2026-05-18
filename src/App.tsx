@@ -10,6 +10,7 @@ import {
   loadHouseholdContext,
   setSelectedHouseholdId as storeSelectedHouseholdId,
   inviteHouseholdMember,
+  deleteHousehold,
   removeHouseholdMember,
   updateHouseholdName
 } from "./lib/households";
@@ -38,7 +39,7 @@ type Sheet = "entry" | "balance" | null;
 type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
 type ThemeMode = "light" | "dark";
 type MaterialIconName = "wallet" | "sync" | "update" | "export" | "import" | "add";
-type UiIconName = "home" | "list" | "more" | "close" | "delete" | "edit" | "moon" | "sun" | "lock" | "users" | "info" | "warning";
+type UiIconName = "home" | "list" | "more" | "close" | "delete" | "edit" | "external" | "moon" | "sun" | "lock" | "users" | "info" | "warning";
 type AuthMode = "sign-in" | "sign-up" | "reset";
 type DialogTone = "info" | "error";
 type HouseholdScreen = { mode: "list" | "create" | "edit"; householdId?: string };
@@ -73,6 +74,7 @@ const UI_ICON_PATHS: Record<UiIconName, string[]> = {
   close: ["M18 6 6 18", "M6 6l12 12"],
   delete: ["M4 7h16", "M10 11v6", "M14 11v6", "M6 7l1 13h10l1-13", "M9 7V5h6v2"],
   edit: ["M4 20h4L18.5 9.5l-4-4L4 16v4", "M13.5 6.5l4 4"],
+  external: ["M14 4h6v6", "M10 14 20 4", "M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"],
   lock: ["M7 10V7a5 5 0 0 1 10 0v3", "M6 10h12v10H6z", "M12 14v2"],
   users: ["M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20", "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z", "M21 20v-1.2a3.6 3.6 0 0 0-2.7-3.5", "M16 4.4a3.5 3.5 0 0 1 0 6.8"],
   info: ["M12 17v-5", "M12 8h.01", "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"],
@@ -135,6 +137,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
   const [sheet, setSheet] = useState<Sheet>(null);
   const [editingMovement, setEditingMovement] = useState<MovementTarget | null>(null);
   const [deletingMovement, setDeletingMovement] = useState<MovementTarget | null>(null);
+  const [deletingHousehold, setDeletingHousehold] = useState<HouseholdSummary | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() => readInitialTheme());
   const [message, setMessage] = useState("");
@@ -241,17 +244,17 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
     : undefined;
   const headerTitle = activeHouseholdScreen
     ? activeHouseholdScreen.mode === "edit"
-      ? "Editar casa"
+      ? "Editar conta"
       : activeHouseholdScreen.mode === "create"
-        ? "Nova casa"
-        : "Casas"
+        ? "Nova conta"
+        : "Contas"
     : view === "home"
       ? "Dashboard"
       : "LanÃ§amentos";
   const headerSubtitle = activeHouseholdScreen
     ? activeHouseholdScreen.mode === "edit"
-      ? screenHousehold?.name ?? "Casa e membros"
-      : "Casa e membros"
+      ? screenHousehold?.name ?? "Contas e membros"
+      : "Contas e membros"
     : view === "timeline"
       ? yearLabel(timelineMonth)
       : monthLabel(currentMonth);
@@ -330,14 +333,14 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
       setHouseholds(context.households);
       setSelectedHouseholdId(context.selectedHouseholdId);
       if (context.selectedHouseholdId) await ensureSettings(context.selectedHouseholdId);
-      if (showMessage) setMessage("Casas atualizadas.");
+      if (showMessage) setMessage("Contas atualizadas.");
     } catch (error) {
       const cachedHouseholds = await loadCachedHouseholds();
       const fallbackHouseholdId = cachedHouseholds.find((household) => household.id === selectedHouseholdId)?.id ?? cachedHouseholds[0]?.id ?? "";
       setHouseholds(cachedHouseholds);
       setSelectedHouseholdId(fallbackHouseholdId);
       if (fallbackHouseholdId) await ensureSettings(fallbackHouseholdId);
-      setMessage(errorMessage(error, "Não foi possível carregar suas casas."));
+      setMessage(errorMessage(error, "Não foi possível carregar suas contas."));
     } finally {
       setHouseholdLoading(false);
     }
@@ -360,11 +363,11 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
       setHouseholds(context.households);
       setSelectedHouseholdId(context.selectedHouseholdId);
       await ensureSettings(context.selectedHouseholdId);
-      setMessage("Casa criada.");
+      setMessage("Conta criada.");
       setHouseholdScreen({ mode: "edit", householdId: context.selectedHouseholdId });
       void runSync(false, context.selectedHouseholdId);
     } catch (error) {
-      setMessage(errorMessage(error, "Não foi possível criar a casa."));
+      setMessage(errorMessage(error, "Não foi possível criar a conta."));
     }
   }
 
@@ -373,9 +376,9 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
       const context = await updateHouseholdName(householdId, name);
       setHouseholds(context.households);
       setSelectedHouseholdId(context.selectedHouseholdId);
-      setMessage("Casa salva.");
+      setMessage("Conta salva.");
     } catch (error) {
-      setMessage(errorMessage(error, "Não foi possível salvar a casa."));
+      setMessage(errorMessage(error, "Não foi possível salvar a conta."));
     }
   }
 
@@ -396,6 +399,22 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
       setMessage("Membro removido.");
     } catch (error) {
       setMessage(errorMessage(error, "Não foi possível remover o membro."));
+    }
+  }
+
+  async function confirmDeleteHousehold() {
+    if (!deletingHousehold) return;
+
+    try {
+      const context = await deleteHousehold(deletingHousehold.id);
+      setHouseholds(context.households);
+      setSelectedHouseholdId(context.selectedHouseholdId);
+      setDeletingHousehold(null);
+      setHouseholdScreen({ mode: context.households.length > 0 ? "list" : "create" });
+      setSheet(null);
+      setMessage("Conta excluída.");
+    } catch (error) {
+      setMessage(errorMessage(error, "Não foi possível excluir a conta."));
     }
   }
 
@@ -453,7 +472,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
 
   function handleNewEntry() {
     if (!selectedHouseholdId) {
-      setMessage("Selecione uma casa antes de lançar.");
+      setMessage("Selecione uma conta antes de lançar.");
       return;
     }
     setEditingMovement(null);
@@ -571,7 +590,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
           <div id="main-overflow-menu" ref={menuRef} className="overflow-menu" role="menu" aria-label="Menu de ações" onKeyDown={handleOverflowMenuKeyDown}>
             <button role="menuitem" type="button" onClick={openHouseholdList}>
               <UiIcon name="users" />
-              <span>Casas e membros</span>
+              <span>Contas e membros</span>
             </button>
             {insideSelectedHousehold && (
               <>
@@ -626,7 +645,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
 
       <main className={activeHouseholdScreen ? "content household-content" : view === "timeline" ? "content timeline-content" : "content"}>
         {householdLoading ? (
-          <div className="empty-state">Carregando suas casas...</div>
+          <div className="empty-state">Carregando suas contas...</div>
         ) : activeHouseholdScreen ? (
           <HouseholdManagerPage
             currentUserEmail={session.user.email ?? ""}
@@ -643,6 +662,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
             }}
             onInvite={(householdId, email, role) => void handleInviteMember(householdId, email, role)}
             onNew={() => setHouseholdScreen({ mode: "create" })}
+            onDelete={(household) => setDeletingHousehold(household)}
             onRefresh={() => void refreshHouseholdContext(true)}
             onRemoveMember={(householdId, memberId) => void handleRemoveMember(householdId, memberId)}
             onSave={(householdId, name) => void handleSaveHousehold(householdId, name)}
@@ -699,6 +719,13 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
         />
       )}
       {sheet === "balance" && <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
+      {deletingHousehold && (
+        <DeleteHouseholdSheet
+          household={deletingHousehold}
+          onCancel={() => setDeletingHousehold(null)}
+          onConfirm={() => void confirmDeleteHousehold()}
+        />
+      )}
       {deletingMovement && (
         <DeleteMovementSheet
           item={deletingMovement}
@@ -1849,6 +1876,7 @@ function HouseholdManagerPage({
   selectedHouseholdId,
   onBackToList,
   onCreate,
+  onDelete,
   onEdit,
   onInvite,
   onNew,
@@ -1865,6 +1893,7 @@ function HouseholdManagerPage({
   selectedHouseholdId: string;
   onBackToList: () => void;
   onCreate: (name: string) => void;
+  onDelete: (household: HouseholdSummary) => void;
   onEdit: (householdId: string) => void;
   onInvite: (householdId: string, email: string, role: HouseholdRole) => void;
   onNew: () => void;
@@ -1917,24 +1946,39 @@ function HouseholdManagerPage({
       <div className="household-manager">
         {identity}
         <div className="section-title">
-          <span>Casas</span>
+          <span>Contas</span>
           <button className="tonal-button compact-button" type="button" onClick={onNew}>
-            Nova casa
+            Nova conta
           </button>
         </div>
-        <div className="household-list" role="list" aria-label="Casas">
+        <div className="household-list" role="list" aria-label="Contas">
           {households.length === 0 ? (
-            <div className="empty-state compact">Nenhuma casa cadastrada.</div>
+            <div className="empty-state compact">Nenhuma conta cadastrada.</div>
           ) : (
             households.map((household) => (
               <article key={household.id} className={household.id === selectedHouseholdId ? "household-row active" : "household-row"} role="listitem">
-                <button className="household-row-main" type="button" onClick={() => onEdit(household.id)}>
+                <div className="household-row-main">
                   <span>{household.name}</span>
                   <small>{roleLabel(household.role)}</small>
-                </button>
-                <button className="tonal-button compact-button" type="button" onClick={() => onSelect(household.id)}>
-                  Acessar
-                </button>
+                </div>
+                <div className="household-row-actions">
+                  <button className="household-action-button" type="button" onClick={() => onEdit(household.id)} aria-label={`Editar ${household.name}`} title="Editar">
+                    <UiIcon name="edit" />
+                  </button>
+                  <button className="household-action-button" type="button" onClick={() => onSelect(household.id)} aria-label={`Acessar ${household.name}`} title="Acessar">
+                    <UiIcon name="external" />
+                  </button>
+                  <button
+                    className="household-action-button danger"
+                    type="button"
+                    onClick={() => onDelete(household)}
+                    aria-label={`Excluir ${household.name}`}
+                    title={household.role === "owner" ? "Excluir" : "Só o dono pode excluir"}
+                    disabled={household.role !== "owner"}
+                  >
+                    <UiIcon name="delete" />
+                  </button>
+                </div>
               </article>
             ))
           )}
@@ -1948,17 +1992,17 @@ function HouseholdManagerPage({
       <div className="household-manager">
         {households.length > 0 && (
           <button className="breadcrumb-button" type="button" onClick={onBackToList}>
-            Casas
+            Contas
           </button>
         )}
         {identity}
         <form className="household-form" onSubmit={handleCreate}>
           <label>
-            Nova casa
-            <input value={householdName} onChange={(event) => setHouseholdName(event.target.value)} placeholder="Casa, apartamento, família" autoFocus />
+            Nova conta
+            <input value={householdName} onChange={(event) => setHouseholdName(event.target.value)} placeholder="Apartamento, família, projeto" autoFocus />
           </label>
           <button className="filled-button" type="submit">
-            Criar casa
+            Criar conta
           </button>
         </form>
       </div>
@@ -1969,9 +2013,9 @@ function HouseholdManagerPage({
     return (
       <div className="household-manager">
         <button className="breadcrumb-button" type="button" onClick={onBackToList}>
-          Casas
+          Contas
         </button>
-        <div className="empty-state compact">Casa não encontrada.</div>
+        <div className="empty-state compact">Conta não encontrada.</div>
       </div>
     );
   }
@@ -1979,17 +2023,17 @@ function HouseholdManagerPage({
   return (
     <div className="household-manager">
       <button className="breadcrumb-button" type="button" onClick={onBackToList}>
-        Casas
+        Contas
       </button>
       {identity}
       <form className="household-form" onSubmit={handleSave}>
         <label>
-          Nome da casa
+          Nome da conta
           <input value={householdName} onChange={(event) => setHouseholdName(event.target.value)} required />
         </label>
         <div className="household-actions">
           <button className="tonal-button" type="button" onClick={() => onSelect(editingHousehold.id)}>
-            Acessar app
+            Acessar
           </button>
           <button className="filled-button" type="submit">
             Salvar
@@ -2108,6 +2152,34 @@ function DeleteMovementSheet({
       <div className="confirm-sheet">
         <p>Excluir {label}?</p>
         <strong>{item.title}</strong>
+        <div className="confirm-actions">
+          <button className="tonal-button" type="button" onClick={onCancel}>
+            Cancelar
+          </button>
+          <button className="danger-button" type="button" onClick={onConfirm}>
+            <UiIcon name="delete" />
+            Excluir
+          </button>
+        </div>
+      </div>
+    </BottomSheet>
+  );
+}
+
+function DeleteHouseholdSheet({
+  household,
+  onCancel,
+  onConfirm
+}: {
+  household: HouseholdSummary;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <BottomSheet title="Excluir conta" onClose={onCancel}>
+      <div className="confirm-sheet">
+        <p>Excluir esta conta?</p>
+        <strong>{household.name}</strong>
         <div className="confirm-actions">
           <button className="tonal-button" type="button" onClick={onCancel}>
             Cancelar
