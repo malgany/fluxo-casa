@@ -9,7 +9,9 @@ import {
   loadCachedHouseholds,
   loadHouseholdContext,
   setSelectedHouseholdId as storeSelectedHouseholdId,
-  inviteHouseholdMember
+  inviteHouseholdMember,
+  removeHouseholdMember,
+  updateHouseholdName
 } from "./lib/households";
 import { getSupabaseClient, isSupabaseConfigured } from "./lib/supabase";
 import {
@@ -32,13 +34,14 @@ import { buildInstallmentPlan, buildInstallmentPreview, MAX_INSTALLMENT_COUNT, p
 import type { AppSettings, Entry, FlowKind, HouseholdMember, HouseholdRole, HouseholdSummary, Recurrence } from "./domain/types";
 
 type View = "home" | "timeline";
-type Sheet = "entry" | "balance" | "households" | null;
+type Sheet = "entry" | "balance" | null;
 type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
 type ThemeMode = "light" | "dark";
 type MaterialIconName = "wallet" | "sync" | "update" | "export" | "import" | "add";
 type UiIconName = "home" | "list" | "more" | "close" | "delete" | "edit" | "moon" | "sun" | "lock" | "users" | "info" | "warning";
 type AuthMode = "sign-in" | "sign-up" | "reset";
 type DialogTone = "info" | "error";
+type HouseholdScreen = { mode: "list" | "create" | "edit"; householdId?: string };
 type MovementTarget = Pick<TimelineItem, "source" | "recordId" | "date" | "title">;
 type EntrySheetRecord =
   | { source: "entry"; record: Entry }
@@ -141,6 +144,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
   const [households, setHouseholds] = useState<HouseholdSummary[]>([]);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
   const [householdLoading, setHouseholdLoading] = useState(true);
+  const [householdScreen, setHouseholdScreen] = useState<HouseholdScreen | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -214,9 +218,10 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
     () => (selectedHouseholdId ? db.settings.get(settingsIdForHousehold(selectedHouseholdId)) : Promise.resolve(undefined)),
     [selectedHouseholdId]
   );
+  const memberHouseholdId = householdScreen?.mode === "edit" && householdScreen.householdId ? householdScreen.householdId : selectedHouseholdId;
   const members = useLiveQuery<HouseholdMember[]>(
-    () => (selectedHouseholdId ? db.householdMembers.where("householdId").equals(selectedHouseholdId).toArray() : Promise.resolve([])),
-    [selectedHouseholdId]
+    () => (memberHouseholdId ? db.householdMembers.where("householdId").equals(memberHouseholdId).toArray() : Promise.resolve([])),
+    [memberHouseholdId]
   ) ?? [];
 
   const data = useMemo(
@@ -227,8 +232,29 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
     }),
     [entries, recurrences, selectedHouseholdId, settings]
   );
-  const selectedHousehold = households.find((household) => household.id === selectedHouseholdId);
   const activeMembers = members.filter(active);
+  const activeHouseholdScreen: HouseholdScreen | null =
+    householdScreen ?? (!householdLoading && !selectedHouseholdId ? { mode: households.length > 0 ? "list" : "create" } : null);
+  const insideSelectedHousehold = Boolean(selectedHouseholdId && !activeHouseholdScreen);
+  const screenHousehold = activeHouseholdScreen?.householdId
+    ? households.find((household) => household.id === activeHouseholdScreen.householdId)
+    : undefined;
+  const headerTitle = activeHouseholdScreen
+    ? activeHouseholdScreen.mode === "edit"
+      ? "Editar casa"
+      : activeHouseholdScreen.mode === "create"
+        ? "Nova casa"
+        : "Casas"
+    : view === "home"
+      ? "Dashboard"
+      : "LanÃ§amentos";
+  const headerSubtitle = activeHouseholdScreen
+    ? activeHouseholdScreen.mode === "edit"
+      ? screenHousehold?.name ?? "Casa e membros"
+      : "Casa e membros"
+    : view === "timeline"
+      ? yearLabel(timelineMonth)
+      : monthLabel(currentMonth);
 
   const homeSnapshot = useMemo(() => calculateMonth(data, currentMonth), [data, currentMonth]);
   const editingSheetRecord = useMemo<EntrySheetRecord | undefined>(() => {
@@ -303,7 +329,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
       const context = await loadHouseholdContext(session);
       setHouseholds(context.households);
       setSelectedHouseholdId(context.selectedHouseholdId);
-      await ensureSettings(context.selectedHouseholdId);
+      if (context.selectedHouseholdId) await ensureSettings(context.selectedHouseholdId);
       if (showMessage) setMessage("Casas atualizadas.");
     } catch (error) {
       const cachedHouseholds = await loadCachedHouseholds();
@@ -320,8 +346,10 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
   async function handleSelectHousehold(householdId: string) {
     storeSelectedHouseholdId(householdId);
     setSelectedHouseholdId(householdId);
+    setHouseholdScreen(null);
     setSheet(null);
     setMenuOpen(false);
+    setView("home");
     await ensureSettings(householdId);
     void runSync(false, householdId);
   }
@@ -333,21 +361,48 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
       setSelectedHouseholdId(context.selectedHouseholdId);
       await ensureSettings(context.selectedHouseholdId);
       setMessage("Casa criada.");
+      setHouseholdScreen({ mode: "edit", householdId: context.selectedHouseholdId });
       void runSync(false, context.selectedHouseholdId);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Nao foi possivel criar a casa.");
     }
   }
 
-  async function handleInviteMember(email: string, role: HouseholdRole) {
-    if (!selectedHouseholdId) return;
+  async function handleSaveHousehold(householdId: string, name: string) {
     try {
-      await inviteHouseholdMember(selectedHouseholdId, email, role);
-      await getHouseholdMembers(selectedHouseholdId);
+      const context = await updateHouseholdName(householdId, name);
+      setHouseholds(context.households);
+      setSelectedHouseholdId(context.selectedHouseholdId);
+      setMessage("Casa salva.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Nao foi possivel salvar a casa.");
+    }
+  }
+
+  async function handleInviteMember(householdId: string, email: string, role: HouseholdRole) {
+    if (!householdId) return;
+    try {
+      await inviteHouseholdMember(householdId, email, role);
+      await getHouseholdMembers(householdId);
       setMessage("Convite enviado.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Nao foi possivel enviar o convite.");
     }
+  }
+
+  async function handleRemoveMember(householdId: string, memberId: string) {
+    try {
+      await removeHouseholdMember(householdId, memberId);
+      setMessage("Membro removido.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Nao foi possivel remover o membro.");
+    }
+  }
+
+  function openHouseholdList() {
+    setHouseholdScreen({ mode: "list" });
+    setSheet(null);
+    setMenuOpen(false);
   }
 
   function revealSyncHint(text?: string) {
@@ -493,11 +548,11 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
 
       <header className="top-app-bar">
         <div className="top-title">
-          <h1>{view === "home" ? "Dashboard" : "Lançamentos"}</h1>
-          <span>{view === "timeline" ? yearLabel(timelineMonth) : monthLabel(currentMonth)}</span>
+          <h1>{headerTitle}</h1>
+          <span>{headerSubtitle}</span>
         </div>
         <div className="app-actions">
-          <SyncIndicator state={syncState} hint={syncHint} visible={syncHintVisible} onPress={() => revealSyncHint()} />
+          {insideSelectedHousehold && <SyncIndicator state={syncState} hint={syncHint} visible={syncHintVisible} onPress={() => revealSyncHint()} />}
           <button
             ref={menuButtonRef}
             className="icon-button"
@@ -514,18 +569,22 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
 
         {menuOpen && (
           <div id="main-overflow-menu" ref={menuRef} className="overflow-menu" role="menu" aria-label="Menu de ações" onKeyDown={handleOverflowMenuKeyDown}>
-            <button role="menuitem" type="button" onClick={() => { setSheet("households"); setMenuOpen(false); }}>
+            <button role="menuitem" type="button" onClick={openHouseholdList}>
               <UiIcon name="users" />
-              <span>{selectedHousehold?.name ?? "Casa e membros"}</span>
+              <span>Casas e membros</span>
             </button>
-            <button role="menuitem" type="button" onClick={() => { setSheet("balance"); setMenuOpen(false); }}>
-              <MaterialIcon name="wallet" className="menu-icon" />
-              <span>Ajustar saldo inicial</span>
-            </button>
-            <button role="menuitem" type="button" onClick={handleSync}>
-              <MaterialIcon name="sync" className="menu-icon" />
-              <span>Sincronizar</span>
-            </button>
+            {insideSelectedHousehold && (
+              <>
+                <button role="menuitem" type="button" onClick={() => { setSheet("balance"); setMenuOpen(false); }}>
+                  <MaterialIcon name="wallet" className="menu-icon" />
+                  <span>Ajustar saldo inicial</span>
+                </button>
+                <button role="menuitem" type="button" onClick={handleSync}>
+                  <MaterialIcon name="sync" className="menu-icon" />
+                  <span>Sincronizar</span>
+                </button>
+              </>
+            )}
             <button role="menuitem" type="button" onClick={handleCheckUpdates}>
               <MaterialIcon name="update" className="menu-icon" />
               <span>Verificar atualizações</span>
@@ -538,15 +597,19 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
               <UiIcon name="lock" />
               <span>Sair</span>
             </button>
-            <div className="menu-divider" role="separator" />
-            <button role="menuitem" type="button" onClick={handleExport}>
-              <MaterialIcon name="export" className="menu-icon" />
-              <span>Exportar backup</span>
-            </button>
-            <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); fileInputRef.current?.click(); }}>
-              <MaterialIcon name="import" className="menu-icon" />
-              <span>Importar backup</span>
-            </button>
+            {insideSelectedHousehold && (
+              <>
+                <div className="menu-divider" role="separator" />
+                <button role="menuitem" type="button" onClick={handleExport}>
+                  <MaterialIcon name="export" className="menu-icon" />
+                  <span>Exportar backup</span>
+                </button>
+                <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); fileInputRef.current?.click(); }}>
+                  <MaterialIcon name="import" className="menu-icon" />
+                  <span>Importar backup</span>
+                </button>
+              </>
+            )}
           </div>
         )}
       </header>
@@ -561,9 +624,30 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
 
       {message && <div className="snackbar">{message}</div>}
 
-      <main className={view === "timeline" ? "content timeline-content" : "content"}>
-        {householdLoading && !selectedHouseholdId ? (
+      <main className={activeHouseholdScreen ? "content household-content" : view === "timeline" ? "content timeline-content" : "content"}>
+        {householdLoading ? (
           <div className="empty-state">Carregando suas casas...</div>
+        ) : activeHouseholdScreen ? (
+          <HouseholdManagerPage
+            currentUserEmail={session.user.email ?? ""}
+            currentUserId={session.user.id}
+            households={households}
+            members={activeMembers}
+            screen={activeHouseholdScreen}
+            selectedHouseholdId={selectedHouseholdId}
+            onBackToList={() => setHouseholdScreen({ mode: "list" })}
+            onCreate={(name) => void handleCreateHousehold(name)}
+            onEdit={(householdId) => {
+              setHouseholdScreen({ mode: "edit", householdId });
+              void getHouseholdMembers(householdId);
+            }}
+            onInvite={(householdId, email, role) => void handleInviteMember(householdId, email, role)}
+            onNew={() => setHouseholdScreen({ mode: "create" })}
+            onRefresh={() => void refreshHouseholdContext(true)}
+            onRemoveMember={(householdId, memberId) => void handleRemoveMember(householdId, memberId)}
+            onSave={(householdId, name) => void handleSaveHousehold(householdId, name)}
+            onSelect={(householdId) => void handleSelectHousehold(householdId)}
+          />
         ) : view === "home" ? (
           <HomeView snapshot={homeSnapshot} />
         ) : (
@@ -578,30 +662,32 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
         )}
       </main>
 
-      <nav className="bottom-nav" aria-label="Navegação inferior">
-        <button className={view === "home" ? "active" : ""} type="button" onClick={() => setView("home")}>
-          <span>
-            <UiIcon name="home" />
-          </span>
-          Dashboard
-        </button>
-        <button className="nav-action" type="button" onClick={handleNewEntry} aria-label="Novo lançamento">
-          Novo
-        </button>
-        <button
-          className={view === "timeline" ? "active" : ""}
-          type="button"
-          onClick={() => {
-            setTimelineMonth(currentMonth);
-            setView("timeline");
-          }}
-        >
-          <span>
-            <UiIcon name="list" />
-          </span>
-          Lançamentos
-        </button>
-      </nav>
+      {insideSelectedHousehold && (
+        <nav className="bottom-nav" aria-label="Navegação inferior">
+          <button className={view === "home" ? "active" : ""} type="button" onClick={() => setView("home")}>
+            <span>
+              <UiIcon name="home" />
+            </span>
+            Dashboard
+          </button>
+          <button className="nav-action" type="button" onClick={handleNewEntry} aria-label="Novo lançamento">
+            Novo
+          </button>
+          <button
+            className={view === "timeline" ? "active" : ""}
+            type="button"
+            onClick={() => {
+              setTimelineMonth(currentMonth);
+              setView("timeline");
+            }}
+          >
+            <span>
+              <UiIcon name="list" />
+            </span>
+            Lançamentos
+          </button>
+        </nav>
+      )}
 
       {sheet === "entry" && (
         <EntrySheet
@@ -613,19 +699,6 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
         />
       )}
       {sheet === "balance" && <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
-      {sheet === "households" && (
-        <HouseholdSheet
-          currentUserEmail={session.user.email ?? ""}
-          households={households}
-          members={activeMembers}
-          selectedHouseholdId={selectedHouseholdId}
-          onClose={() => setSheet(null)}
-          onCreate={(name) => void handleCreateHousehold(name)}
-          onInvite={(email, role) => void handleInviteMember(email, role)}
-          onRefresh={() => void refreshHouseholdContext(true)}
-          onSelect={(householdId) => void handleSelectHousehold(householdId)}
-        />
-      )}
       {deletingMovement && (
         <DeleteMovementSheet
           item={deletingMovement}
@@ -1757,126 +1830,215 @@ function EntrySheet({
   );
 }
 
-function HouseholdSheet({
+function HouseholdManagerPage({
   currentUserEmail,
+  currentUserId,
   households,
   members,
+  screen,
   selectedHouseholdId,
-  onClose,
+  onBackToList,
   onCreate,
+  onEdit,
   onInvite,
+  onNew,
   onRefresh,
+  onRemoveMember,
+  onSave,
   onSelect
 }: {
   currentUserEmail: string;
+  currentUserId: string;
   households: HouseholdSummary[];
   members: HouseholdMember[];
+  screen: HouseholdScreen;
   selectedHouseholdId: string;
-  onClose: () => void;
+  onBackToList: () => void;
   onCreate: (name: string) => void;
-  onInvite: (email: string, role: HouseholdRole) => void;
+  onEdit: (householdId: string) => void;
+  onInvite: (householdId: string, email: string, role: HouseholdRole) => void;
+  onNew: () => void;
   onRefresh: () => void;
+  onRemoveMember: (householdId: string, memberId: string) => void;
+  onSave: (householdId: string, name: string) => void;
   onSelect: (householdId: string) => void;
 }) {
+  const editingHousehold = screen.householdId ? households.find((household) => household.id === screen.householdId) : undefined;
   const [householdName, setHouseholdName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<HouseholdRole>("member");
-  const selectedHousehold = households.find((household) => household.id === selectedHouseholdId);
-  const canInvite = selectedHousehold?.role === "owner" || selectedHousehold?.role === "admin";
+  const canManageMembers = editingHousehold?.role === "owner" || editingHousehold?.role === "admin";
+
+  useEffect(() => {
+    setHouseholdName(screen.mode === "edit" ? editingHousehold?.name ?? "" : "");
+    setInviteEmail("");
+    setInviteRole("member");
+  }, [editingHousehold?.id, editingHousehold?.name, screen.mode]);
 
   function handleCreate(event: FormEvent) {
     event.preventDefault();
     if (!householdName.trim()) return;
     onCreate(householdName);
-    setHouseholdName("");
+  }
+
+  function handleSave(event: FormEvent) {
+    event.preventDefault();
+    if (!editingHousehold || !householdName.trim()) return;
+    onSave(editingHousehold.id, householdName);
   }
 
   function handleInvite(event: FormEvent) {
     event.preventDefault();
-    if (!inviteEmail.trim()) return;
-    onInvite(inviteEmail, inviteRole);
+    if (!editingHousehold || !inviteEmail.trim()) return;
+    onInvite(editingHousehold.id, inviteEmail, inviteRole);
     setInviteEmail("");
     setInviteRole("member");
   }
 
-  return (
-    <BottomSheet title="Casa e membros" onClose={onClose}>
-      <div className="household-sheet">
-        <div className="household-current">
-          <span>Conectado como</span>
-          <strong>{currentUserEmail}</strong>
-        </div>
+  const identity = (
+    <div className="household-current">
+      <span>Conectado como</span>
+      <strong>{currentUserEmail}</strong>
+    </div>
+  );
 
+  if (screen.mode === "list") {
+    return (
+      <div className="household-manager">
+        {identity}
+        <div className="section-title">
+          <span>Casas</span>
+          <button className="tonal-button compact-button" type="button" onClick={onNew}>
+            Nova casa
+          </button>
+        </div>
         <div className="household-list" role="list" aria-label="Casas">
-          {households.map((household) => (
-            <button
-              key={household.id}
-              className={household.id === selectedHouseholdId ? "active" : ""}
-              type="button"
-              role="listitem"
-              onClick={() => onSelect(household.id)}
-            >
-              <span>{household.name}</span>
-              <small>{roleLabel(household.role)}</small>
-            </button>
-          ))}
+          {households.length === 0 ? (
+            <div className="empty-state compact">Nenhuma casa cadastrada.</div>
+          ) : (
+            households.map((household) => (
+              <article key={household.id} className={household.id === selectedHouseholdId ? "household-row active" : "household-row"} role="listitem">
+                <button className="household-row-main" type="button" onClick={() => onEdit(household.id)}>
+                  <span>{household.name}</span>
+                  <small>{roleLabel(household.role)}</small>
+                </button>
+                <button className="tonal-button compact-button" type="button" onClick={() => onSelect(household.id)}>
+                  Acessar
+                </button>
+              </article>
+            ))
+          )}
         </div>
+      </div>
+    );
+  }
 
-        <form className="sheet-form" onSubmit={handleCreate}>
+  if (screen.mode === "create") {
+    return (
+      <div className="household-manager">
+        {households.length > 0 && (
+          <button className="breadcrumb-button" type="button" onClick={onBackToList}>
+            Casas
+          </button>
+        )}
+        {identity}
+        <form className="household-form" onSubmit={handleCreate}>
           <label>
             Nova casa
-            <input value={householdName} onChange={(event) => setHouseholdName(event.target.value)} placeholder="Casa, apartamento, família" />
+            <input value={householdName} onChange={(event) => setHouseholdName(event.target.value)} placeholder="Casa, apartamento, família" autoFocus />
           </label>
-          <button className="tonal-button" type="submit">
+          <button className="filled-button" type="submit">
             Criar casa
           </button>
         </form>
+      </div>
+    );
+  }
 
-        <div className="member-section">
-          <div className="section-title">
-            <span>Membros</span>
-            <button className="text-button" type="button" onClick={onRefresh}>
-              Atualizar
-            </button>
-          </div>
-          <div className="member-list">
-            {members.length === 0 ? (
-              <div className="empty-state compact">Nenhum membro carregado.</div>
-            ) : (
-              members.map((member) => (
+  if (!editingHousehold) {
+    return (
+      <div className="household-manager">
+        <button className="breadcrumb-button" type="button" onClick={onBackToList}>
+          Casas
+        </button>
+        <div className="empty-state compact">Casa não encontrada.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="household-manager">
+      <button className="breadcrumb-button" type="button" onClick={onBackToList}>
+        Casas
+      </button>
+      {identity}
+      <form className="household-form" onSubmit={handleSave}>
+        <label>
+          Nome da casa
+          <input value={householdName} onChange={(event) => setHouseholdName(event.target.value)} required />
+        </label>
+        <div className="household-actions">
+          <button className="tonal-button" type="button" onClick={() => onSelect(editingHousehold.id)}>
+            Acessar app
+          </button>
+          <button className="filled-button" type="submit">
+            Salvar
+          </button>
+        </div>
+      </form>
+
+      <div className="member-section">
+        <div className="section-title">
+          <span>Membros</span>
+          <button className="text-button" type="button" onClick={onRefresh}>
+            Atualizar
+          </button>
+        </div>
+        <div className="member-list">
+          {members.length === 0 ? (
+            <div className="empty-state compact">Nenhum membro carregado.</div>
+          ) : (
+            members.map((member) => {
+              const canRemove = canManageMembers && member.userId !== currentUserId && member.role !== "owner";
+              return (
                 <div key={member.id} className="member-row">
                   <span>{member.email || member.userId}</span>
                   <small>{roleLabel(member.role)}</small>
+                  {canRemove && (
+                    <button className="danger-text-button" type="button" onClick={() => onRemoveMember(editingHousehold.id, member.id)}>
+                      Remover
+                    </button>
+                  )}
                 </div>
-              ))
-            )}
-          </div>
+              );
+            })
+          )}
         </div>
-
-        <form className="sheet-form" onSubmit={handleInvite}>
-          <label>
-            Convidar por e-mail
-            <input
-              value={inviteEmail}
-              onChange={(event) => setInviteEmail(event.target.value)}
-              type="email"
-              placeholder="pessoa@email.com"
-              disabled={!canInvite}
-            />
-          </label>
-          <label>
-            Permissão
-            <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as HouseholdRole)} disabled={!canInvite}>
-              <option value="member">Membro</option>
-              <option value="admin">Administrador</option>
-            </select>
-          </label>
-          <button className="filled-button" type="submit" disabled={!canInvite}>
-            Enviar convite
-          </button>
-        </form>
       </div>
-    </BottomSheet>
+
+      <form className="household-form" onSubmit={handleInvite}>
+        <label>
+          Convidar por e-mail
+          <input
+            value={inviteEmail}
+            onChange={(event) => setInviteEmail(event.target.value)}
+            type="email"
+            placeholder="pessoa@email.com"
+            disabled={!canManageMembers}
+          />
+        </label>
+        <label>
+          Permissão
+          <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as HouseholdRole)} disabled={!canManageMembers}>
+            <option value="member">Membro</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </label>
+        <button className="filled-button" type="submit" disabled={!canManageMembers}>
+          Enviar convite
+        </button>
+      </form>
+    </div>
   );
 }
 

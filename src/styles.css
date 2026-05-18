@@ -1794,7 +1794,16 @@ select {
   line-height: 1.25rem;
 }
 
-.household-sheet {
+.household-content {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+.household-manager {
+  display: grid;
+  gap: 16px;
+}
+
+.household-form {
   display: grid;
   gap: 16px;
 }
@@ -1829,31 +1838,76 @@ select {
   gap: 8px;
 }
 
-.household-list button {
+.household-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 54px;
   border: 1px solid var(--outline-variant);
   border-radius: var(--shape-small);
   padding: 10px 12px;
   background: var(--surface-container-lowest);
   color: var(--on-surface);
-  font-weight: 800;
 }
 
-.household-list button.active {
+.household-row.active {
   border-color: var(--primary);
   background: var(--primary-container);
   color: var(--on-primary-container);
 }
 
+.household-row-main {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  min-height: 42px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.household-row-main span {
+  overflow: hidden;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.household-row-main small,
 .household-list small {
   color: inherit;
   opacity: 0.72;
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+.household-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.breadcrumb-button {
+  justify-self: start;
+  min-height: 40px;
+  border-radius: var(--shape-full);
+  padding: 0 14px;
+  background: var(--surface-container-high);
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.breadcrumb-button:hover,
+.breadcrumb-button:focus-visible {
+  background: var(--state-primary-hover);
+  outline: 0;
+}
+
+.compact-button {
+  min-height: 40px;
+  padding-inline: 14px;
 }
 
 .member-section {
@@ -1868,6 +1922,31 @@ select {
   gap: 12px;
   color: var(--on-surface);
   font-weight: 800;
+}
+
+.member-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.member-row .danger-text-button {
+  grid-column: 2;
+  justify-self: end;
+}
+
+.danger-text-button {
+  min-height: 36px;
+  border-radius: var(--shape-full);
+  padding: 0 12px;
+  background: transparent;
+  color: var(--red);
+  font-weight: 800;
+}
+
+.danger-text-button:hover,
+.danger-text-button:focus-visible {
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+  outline: 0;
 }
 
 .scope-group {

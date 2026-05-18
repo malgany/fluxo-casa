@@ -36,7 +36,8 @@ export function getSelectedHouseholdId(): string {
 }
 
 export function setSelectedHouseholdId(householdId: string): void {
-  localStorage.setItem(selectedHouseholdKey, householdId);
+  if (householdId) localStorage.setItem(selectedHouseholdKey, householdId);
+  else localStorage.removeItem(selectedHouseholdKey);
 }
 
 export async function loadHouseholdContext(session: Session): Promise<HouseholdContext> {
@@ -45,22 +46,12 @@ export async function loadHouseholdContext(session: Session): Promise<HouseholdC
   const { error: invitationError } = await supabase.rpc("accept_pending_invitations");
   if (invitationError) throw invitationError;
 
-  let households = await fetchHouseholds();
-  if (households.length === 0) {
-    const { error } = await supabase.rpc("create_household", { household_name: "Minha casa" });
-    if (error) throw error;
-    households = await fetchHouseholds();
-  }
-
-  if (households.length === 0) {
-    throw new Error("Nao foi possivel criar ou carregar uma casa.");
-  }
-
+  const households = await fetchHouseholds();
   await saveHouseholdsLocally(households);
-  await refreshMembers(households.map((household) => household.id));
+  if (households.length > 0) await refreshMembers(households.map((household) => household.id));
 
   const stored = getSelectedHouseholdId();
-  const selectedHouseholdId = households.some((household) => household.id === stored) ? stored : households[0].id;
+  const selectedHouseholdId = households.some((household) => household.id === stored) ? stored : households[0]?.id ?? "";
   setSelectedHouseholdId(selectedHouseholdId);
 
   await upsertProfile(session);
@@ -101,6 +92,37 @@ export async function createHousehold(name: string): Promise<HouseholdContext> {
   const selectedHouseholdId = created?.id ?? households[0]?.id ?? "";
   if (selectedHouseholdId) setSelectedHouseholdId(selectedHouseholdId);
   return { households, selectedHouseholdId };
+}
+
+export async function updateHouseholdName(householdId: string, name: string): Promise<HouseholdContext> {
+  const cleanName = name.trim();
+  if (!householdId || !cleanName) throw new Error("Informe o nome da casa.");
+
+  const { error } = await getSupabaseClient().rpc("update_household_name", {
+    target_household_id: householdId,
+    household_name: cleanName
+  });
+  if (error) throw error;
+
+  const households = await fetchHouseholds();
+  await saveHouseholdsLocally(households);
+  await refreshMembers(households.map((household) => household.id));
+
+  const selectedHouseholdId = households.some((household) => household.id === householdId) ? householdId : households[0]?.id ?? "";
+  setSelectedHouseholdId(selectedHouseholdId);
+  return { households, selectedHouseholdId };
+}
+
+export async function removeHouseholdMember(householdId: string, memberId: string): Promise<HouseholdMember[]> {
+  if (!householdId || !memberId) throw new Error("Membro invalido.");
+
+  const { error } = await getSupabaseClient().rpc("remove_household_member", {
+    target_member_id: memberId
+  });
+  if (error) throw error;
+
+  await refreshMembers([householdId]);
+  return db.householdMembers.where("householdId").equals(householdId).toArray();
 }
 
 export async function inviteHouseholdMember(householdId: string, email: string, role: HouseholdRole): Promise<void> {
