@@ -11,7 +11,7 @@ export function isSupabaseConfigured(): boolean {
 
 export function getSupabaseClient(): SupabaseClient {
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Supabase nao configurado. Preencha VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.");
+    throw new Error("Supabase não configurado. Preencha VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.");
   }
 
   client ??= createClient(supabaseUrl, supabaseAnonKey, {

@@ -50,14 +50,14 @@ interface SettingsRow {
 const syncKeyPrefix = "fluxo-casa-supabase-sync-at";
 
 export async function syncNow(householdId: string): Promise<SyncResult> {
-  if (!householdId) return { ok: false, message: "Casa nao selecionada." };
+  if (!householdId) return { ok: false, message: "Casa não selecionada." };
 
   try {
     const supabase = getSupabaseClient();
     const {
       data: { session }
     } = await supabase.auth.getSession();
-    if (!session) return { ok: false, message: "Sessao expirada. Entre novamente." };
+    if (!session) return { ok: false, message: "Sessão expirada. Entre novamente." };
 
     const pulled = await pullRemoteChanges(householdId);
     await applyRemoteChanges(pulled);
@@ -69,7 +69,7 @@ export async function syncNow(householdId: string): Promise<SyncResult> {
     setLastSyncAt(householdId, new Date().toISOString());
     return { ok: true, message: "Sincronizado." };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : "Sincronizacao falhou." };
+    return { ok: false, message: error instanceof Error ? error.message : "Sincronização falhou." };
   }
 }
 

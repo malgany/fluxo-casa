@@ -26,13 +26,13 @@ app.get("/api/status", async () => ({
 
 app.post<{ Body: { householdId?: string; email?: string; role?: HouseholdRole } }>("/api/invite", async (request, reply) => {
   const token = request.headers.authorization?.replace(/^Bearer\s+/i, "").trim();
-  if (!token) return reply.code(401).send({ message: "Sessao expirada. Entre novamente." });
+  if (!token) return reply.code(401).send({ message: "Sessão expirada. Entre novamente." });
 
   const householdId = request.body?.householdId?.trim();
   const email = request.body?.email?.trim().toLowerCase();
   const role = request.body?.role ?? "member";
   if (!householdId || !email || !["admin", "member"].includes(role)) {
-    return reply.code(400).send({ message: "Convite invalido." });
+    return reply.code(400).send({ message: "Convite inválido." });
   }
 
   const supabase = getSupabaseAdminClient();
@@ -40,7 +40,7 @@ app.post<{ Body: { householdId?: string; email?: string; role?: HouseholdRole } 
     data: { user },
     error: userError
   } = await supabase.auth.getUser(token);
-  if (userError || !user?.email) return reply.code(401).send({ message: "Sessao expirada. Entre novamente." });
+  if (userError || !user?.email) return reply.code(401).send({ message: "Sessão expirada. Entre novamente." });
 
   const { data: member, error: memberError } = await supabase
     .from("household_members")
@@ -51,7 +51,7 @@ app.post<{ Body: { householdId?: string; email?: string; role?: HouseholdRole } 
     .maybeSingle();
 
   if (memberError || !member || !["owner", "admin"].includes(member.role)) {
-    return reply.code(403).send({ message: "Voce nao pode convidar membros para esta casa." });
+    return reply.code(403).send({ message: "Você não pode convidar membros para esta casa." });
   }
 
   const { error: inviteError } = await supabase.from("household_invitations").upsert(

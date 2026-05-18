@@ -337,7 +337,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
       setHouseholds(cachedHouseholds);
       setSelectedHouseholdId(fallbackHouseholdId);
       if (fallbackHouseholdId) await ensureSettings(fallbackHouseholdId);
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel carregar suas casas.");
+      setMessage(errorMessage(error, "Não foi possível carregar suas casas."));
     } finally {
       setHouseholdLoading(false);
     }
@@ -364,7 +364,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
       setHouseholdScreen({ mode: "edit", householdId: context.selectedHouseholdId });
       void runSync(false, context.selectedHouseholdId);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel criar a casa.");
+      setMessage(errorMessage(error, "Não foi possível criar a casa."));
     }
   }
 
@@ -375,7 +375,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
       setSelectedHouseholdId(context.selectedHouseholdId);
       setMessage("Casa salva.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel salvar a casa.");
+      setMessage(errorMessage(error, "Não foi possível salvar a casa."));
     }
   }
 
@@ -386,7 +386,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
       await getHouseholdMembers(householdId);
       setMessage("Convite enviado.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel enviar o convite.");
+      setMessage(errorMessage(error, "Não foi possível enviar o convite."));
     }
   }
 
@@ -395,7 +395,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
       await removeHouseholdMember(householdId, memberId);
       setMessage("Membro removido.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel remover o membro.");
+      setMessage(errorMessage(error, "Não foi possível remover o membro."));
     }
   }
 
@@ -750,7 +750,7 @@ function AuthGate({ checking = false, configured }: { checking?: boolean; config
         setDialog({
           tone: "info",
           title: "E-mail enviado",
-          message: "Enviamos uma mensagem com as instrucoes para recuperar sua senha.",
+          message: "Enviamos uma mensagem com as instruções para recuperar sua senha.",
           onClose: () => {
             setMode("sign-in");
             setPassword("");
@@ -772,7 +772,7 @@ function AuthGate({ checking = false, configured }: { checking?: boolean; config
           setDialog({
             tone: "info",
             title: "Cadastro criado",
-            message: "Enviamos um e-mail de confirmacao. Confirme seu cadastro antes de entrar.",
+            message: "Enviamos um e-mail de confirmação. Confirme seu cadastro antes de entrar.",
             onClose: () => {
               setMode("sign-in");
               setPassword("");
@@ -790,7 +790,7 @@ function AuthGate({ checking = false, configured }: { checking?: boolean; config
     } catch (error) {
       setDialog({
         tone: "error",
-        title: "Nao foi possivel entrar",
+        title: "Não foi possível entrar",
         message: translateAuthError(error)
       });
     } finally {
@@ -878,7 +878,7 @@ function PasswordSetupGate({ onDone }: { onDone: () => void }) {
     } catch (error) {
       setDialog({
         tone: "error",
-        title: "Senha nao salva",
+        title: "Senha não salva",
         message: translateAuthError(error)
       });
     } finally {
@@ -936,18 +936,28 @@ function MaterialDialog({
   );
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  if (typeof error === "string" && error.trim()) return error;
+  return fallback;
+}
+
 function translateAuthError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error || "");
+  const message = errorMessage(error, "");
   const normalized = message.toLowerCase();
 
   if (normalized.includes("email not confirmed")) {
-    return "E-mail nao confirmado. Abra a mensagem que enviamos e confirme seu cadastro antes de entrar.";
+    return "E-mail não confirmado. Abra a mensagem que enviamos e confirme seu cadastro antes de entrar.";
   }
   if (normalized.includes("invalid login credentials")) {
     return "E-mail ou senha incorretos. Confira os dados e tente novamente.";
   }
   if (normalized.includes("user already registered") || normalized.includes("already registered")) {
-    return "Este e-mail ja possui cadastro. Entre com sua senha ou recupere o acesso.";
+    return "Este e-mail já possui cadastro. Entre com sua senha ou recupere o acesso.";
   }
   if (normalized.includes("password") && (normalized.includes("6") || normalized.includes("weak"))) {
     return "A senha precisa ter pelo menos 6 caracteres.";
@@ -956,10 +966,10 @@ function translateAuthError(error: unknown): string {
     return "Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.";
   }
   if (normalized.includes("failed to fetch") || normalized.includes("network")) {
-    return "Nao foi possivel conectar ao Supabase. Verifique sua conexao e tente novamente.";
+    return "Não foi possível conectar ao Supabase. Verifique sua conexão e tente novamente.";
   }
 
-  return "Nao foi possivel concluir esta acao. Tente novamente.";
+  return "Não foi possível concluir esta ação. Tente novamente.";
 }
 
 function isPasswordSetupUrl(): boolean {

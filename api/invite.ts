@@ -7,13 +7,13 @@ const roles: HouseholdRole[] = ["admin", "member"];
 export default async function handler(request: ApiRequest, response: ApiResponse) {
   if (request.method !== "POST") {
     response.setHeader("Allow", "POST");
-    response.status(405).json({ message: "Metodo nao permitido." });
+    response.status(405).json({ message: "Método não permitido." });
     return;
   }
 
   const token = getBearerToken(request.headers.authorization);
   if (!token) {
-    response.status(401).json({ message: "Sessao expirada. Entre novamente." });
+    response.status(401).json({ message: "Sessão expirada. Entre novamente." });
     return;
   }
 
@@ -23,7 +23,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   const role = payload?.role ?? "member";
 
   if (!householdId || !email || !roles.includes(role)) {
-    response.status(400).json({ message: "Convite invalido." });
+    response.status(400).json({ message: "Convite inválido." });
     return;
   }
 
@@ -33,7 +33,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     error: userError
   } = await supabase.auth.getUser(token);
   if (userError || !user?.email) {
-    response.status(401).json({ message: "Sessao expirada. Entre novamente." });
+    response.status(401).json({ message: "Sessão expirada. Entre novamente." });
     return;
   }
 
@@ -46,7 +46,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     .maybeSingle();
 
   if (memberError || !member || !["owner", "admin"].includes(member.role)) {
-    response.status(403).json({ message: "Voce nao pode convidar membros para esta casa." });
+    response.status(403).json({ message: "Você não pode convidar membros para esta casa." });
     return;
   }
 

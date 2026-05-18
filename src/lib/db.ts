@@ -157,7 +157,7 @@ export async function exportBackup(householdId: string): Promise<{ exportedAt: s
 }
 
 export async function importBackup(payload: { changes?: SyncChanges }, householdId: string): Promise<void> {
-  if (!payload.changes) throw new Error("Backup invalido.");
+  if (!payload.changes) throw new Error("Backup inválido.");
 
   await db.transaction(
     "rw",

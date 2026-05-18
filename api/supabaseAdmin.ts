@@ -5,7 +5,7 @@ export function getSupabaseAdminClient() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {
-    throw new Error("Supabase Admin nao configurado. Preencha VITE_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.");
+    throw new Error("Supabase Admin não configurado. Preencha VITE_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.");
   }
 
   return createClient(url, serviceRoleKey, {

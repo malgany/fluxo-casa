@@ -82,7 +82,7 @@ export async function loadCachedHouseholds(): Promise<HouseholdSummary[]> {
 export async function createHousehold(name: string): Promise<HouseholdContext> {
   const supabase = getSupabaseClient();
   const { error } = await supabase.rpc("create_household", { household_name: name.trim() || "Minha casa" });
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 
   const households = await fetchHouseholds();
   await saveHouseholdsLocally(households);
@@ -102,7 +102,7 @@ export async function updateHouseholdName(householdId: string, name: string): Pr
     target_household_id: householdId,
     household_name: cleanName
   });
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 
   const households = await fetchHouseholds();
   await saveHouseholdsLocally(households);
@@ -114,12 +114,12 @@ export async function updateHouseholdName(householdId: string, name: string): Pr
 }
 
 export async function removeHouseholdMember(householdId: string, memberId: string): Promise<HouseholdMember[]> {
-  if (!householdId || !memberId) throw new Error("Membro invalido.");
+  if (!householdId || !memberId) throw new Error("Membro inválido.");
 
   const { error } = await getSupabaseClient().rpc("remove_household_member", {
     target_member_id: memberId
   });
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 
   await refreshMembers([householdId]);
   return db.householdMembers.where("householdId").equals(householdId).toArray();
@@ -131,7 +131,7 @@ export async function inviteHouseholdMember(householdId: string, email: string, 
     data: { session }
   } = await supabase.auth.getSession();
   const token = session?.access_token;
-  if (!token) throw new Error("Sessao expirada. Entre novamente.");
+  if (!token) throw new Error("Sessão expirada. Entre novamente.");
 
   const response = await fetch("/api/invite", {
     method: "POST",
@@ -143,8 +143,8 @@ export async function inviteHouseholdMember(householdId: string, email: string, 
   });
 
   if (!response.ok) {
-    const error = (await response.json().catch(() => ({ message: "Nao foi possivel enviar o convite." }))) as { message?: string };
-    throw new Error(error.message || "Nao foi possivel enviar o convite.");
+    const error = (await response.json().catch(() => ({ message: "Não foi possível enviar o convite." }))) as { message?: string };
+    throw new Error(error.message || "Não foi possível enviar o convite.");
   }
 }
 
@@ -155,7 +155,7 @@ export async function getHouseholdMembers(householdId: string): Promise<Househol
 
 async function fetchHouseholds(): Promise<HouseholdSummary[]> {
   const { data, error } = await getSupabaseClient().rpc("get_my_households");
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 
   return ((data ?? []) as HouseholdRow[]).map((row) => ({
     id: row.id,
@@ -171,7 +171,7 @@ async function refreshMembers(householdIds: string[]): Promise<void> {
   if (householdIds.length === 0) return;
 
   const { data, error } = await getSupabaseClient().from("household_members").select("*").in("household_id", householdIds);
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 
   await db.householdMembers.bulkPut(((data ?? []) as HouseholdMemberRow[]).map(memberFromRow));
 }
