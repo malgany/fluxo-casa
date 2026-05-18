@@ -344,9 +344,9 @@ textarea {
   z-index: 10;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: 64px 72px;
-  min-height: calc(152px + env(safe-area-inset-top));
-  padding: env(safe-area-inset-top) 4px 16px 16px;
+  grid-template-rows: 52px 60px;
+  min-height: calc(128px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 4px 12px 16px;
   background: var(--surface);
 }
 
@@ -364,9 +364,9 @@ textarea {
   margin: 0;
   overflow: hidden;
   color: var(--on-surface);
-  font-size: 2.25rem;
+  font-size: 2rem;
   font-weight: 400;
-  line-height: 2.75rem;
+  line-height: 2.5rem;
   letter-spacing: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -375,9 +375,9 @@ textarea {
 .top-title span {
   overflow: hidden;
   color: var(--on-surface-variant);
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 500;
-  line-height: 1.5rem;
+  line-height: 1.3rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -642,14 +642,14 @@ textarea {
 .content {
   min-height: 0;
   overflow-y: auto;
-  padding: 16px 16px calc(112px + env(safe-area-inset-bottom));
+  padding: 12px 16px calc(88px + env(safe-area-inset-bottom));
 }
 
 .timeline-content {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
-  padding-bottom: 16px;
+  padding-bottom: 12px;
 }
 
 .stack {
@@ -852,11 +852,11 @@ textarea {
   grid-template-columns: 1fr auto 1fr;
   gap: 8px;
   align-items: center;
-  min-height: 50px;
+  min-height: 44px;
 }
 
 .month-strip button {
-  min-height: 40px;
+  min-height: 38px;
   border-radius: var(--shape-full);
   padding: 0 12px;
   background: transparent;
@@ -880,15 +880,16 @@ textarea {
 
 .month-strip strong {
   display: inline-grid;
-  min-height: 40px;
+  min-height: 38px;
   min-width: 98px;
   place-items: center;
   border-radius: var(--shape-full);
-  padding: 0 18px;
+  padding: 0 16px 1px;
   background: var(--secondary-container);
   white-space: nowrap;
   color: var(--on-secondary-container);
-  font-size: 1.05rem;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .timeline-stack,
@@ -926,7 +927,7 @@ textarea {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   flex: 0 0 33.333333%;
-  gap: 16px;
+  gap: 12px;
 }
 
 .month-strip,
@@ -943,7 +944,7 @@ textarea {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   align-content: stretch;
-  gap: 16px;
+  gap: 12px;
   min-height: 0;
   overflow: hidden;
   overscroll-behavior: contain;
@@ -957,16 +958,16 @@ textarea {
 }
 
 .timeline-list-section {
-  align-self: start;
+  align-self: stretch;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 14px;
+  gap: 10px;
   width: 100%;
   max-height: 100%;
   min-height: 0;
   overflow: hidden;
   border-radius: var(--shape-extra-large) var(--shape-extra-large) 0 0;
-  padding: 24px 16px 0;
+  padding: 18px 16px 4px;
   background: var(--timeline-section);
 }
 
@@ -974,22 +975,22 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 42px;
+  min-height: 34px;
 }
 
 .timeline-list-header h2 {
   margin: 0;
   color: var(--bottom-nav-fg);
-  font-size: 2rem;
+  font-size: 1.65rem;
   font-weight: 400;
-  line-height: 2.45rem;
+  line-height: 2rem;
   letter-spacing: 0;
 }
 
 .balance-summary {
   display: grid;
-  gap: 4px;
-  padding: 16px;
+  gap: 2px;
+  padding: 12px 16px;
 }
 
 .summary-line {
@@ -997,7 +998,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 34px;
+  min-height: 30px;
   font-size: 1rem;
   color: var(--on-surface-variant);
 }
@@ -1008,9 +1009,9 @@ textarea {
 
 .summary-line b {
   overflow-wrap: anywhere;
-  color: var(--on-surface);
+  color: var(--on-surface-variant);
   font-size: 1rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.2;
 }
 
@@ -1027,7 +1028,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 42px;
+  min-height: 36px;
   color: var(--on-surface-variant);
   font-size: 1rem;
 }
@@ -1104,7 +1105,7 @@ textarea {
 .swipe-row {
   position: relative;
   overflow: hidden;
-  min-height: 80px;
+  min-height: 64px;
   border-radius: var(--shape-extra-small);
   touch-action: pan-y;
   user-select: none;
@@ -1169,12 +1170,12 @@ textarea {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
-  gap: 14px;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 12px;
   align-items: center;
-  min-height: 80px;
+  min-height: 64px;
   border-radius: inherit;
-  padding: 12px 16px;
+  padding: 8px 14px;
   background: var(--timeline-row);
   transform: translateX(var(--swipe-offset, 0));
   transition: transform var(--duration-short) var(--easing-standard);
@@ -1190,8 +1191,8 @@ textarea {
 
 .entry-icon {
   display: inline-grid;
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   place-items: center;
   overflow: hidden;
   border-radius: var(--shape-full);
@@ -1225,22 +1226,22 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--on-surface);
-  font-size: 1.06rem;
+  font-size: 1rem;
   font-weight: 500;
-  line-height: 1.5rem;
+  line-height: 1.35rem;
 }
 
 .timeline-text span {
   color: var(--on-surface-variant);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  font-size: 0.82rem;
+  line-height: 1.05rem;
 }
 
 .amount {
   text-align: right;
   white-space: nowrap;
   color: var(--bottom-nav-fg);
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   line-height: 1.25rem;
 }
@@ -1295,9 +1296,9 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 64px;
+  min-height: 56px;
   font-size: 1rem;
-  padding: 16px 16px;
+  padding: 12px 16px;
 }
 
 .month-totals span {
@@ -1307,10 +1308,10 @@ textarea {
 
 .month-totals b {
   overflow-wrap: anywhere;
-  color: var(--on-surface);
+  color: var(--on-surface-variant);
   text-align: right;
   font-size: 1rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.2;
 }
 
@@ -1324,40 +1325,46 @@ textarea {
   grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr);
   column-gap: 12px;
   width: min(100%, 520px);
-  min-height: 88px;
+  min-height: 68px;
   margin: 0 auto;
   border-top: 0;
   border-radius: 0;
-  padding: 10px 24px calc(10px + env(safe-area-inset-bottom));
+  padding: 6px 24px calc(6px + env(safe-area-inset-bottom));
   background: var(--bottom-nav-bg);
 }
 
 .bottom-nav button {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   place-items: center;
   min-width: 0;
   border-radius: var(--shape-small);
   padding: 0;
   background: transparent;
   color: var(--bottom-nav-fg);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   transition:
     background var(--duration-short) var(--easing-standard),
     color var(--duration-short) var(--easing-standard);
 }
 
-.bottom-nav button:hover,
 .bottom-nav button:focus-visible {
-  background: var(--state-hover);
-  outline: 0;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bottom-nav button:hover {
+    background: var(--state-hover);
+    outline: 0;
+  }
 }
 
 .bottom-nav button > span {
   display: grid;
-  width: 64px;
-  height: 32px;
+  width: 60px;
+  height: 28px;
   place-items: center;
   border-radius: var(--shape-full);
   transition:
@@ -1381,8 +1388,8 @@ textarea {
   justify-self: center;
   align-self: center;
   gap: 0;
-  width: 64px;
-  min-height: 56px;
+  width: 62px;
+  min-height: 52px;
   border-radius: var(--shape-large);
   padding: 0 10px;
   background: var(--primary);
@@ -1394,11 +1401,20 @@ textarea {
   display: none;
 }
 
-.bottom-nav button.nav-action:hover,
+@media (hover: hover) and (pointer: fine) {
+  .bottom-nav button.nav-action:hover {
+    background: color-mix(in srgb, var(--primary) 88%, var(--on-primary));
+    color: var(--on-primary);
+    box-shadow: var(--elevation-1);
+  }
+}
+
 .bottom-nav button.nav-action:focus-visible {
   background: color-mix(in srgb, var(--primary) 88%, var(--on-primary));
   color: var(--on-primary);
   box-shadow: var(--elevation-1);
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .snackbar {
