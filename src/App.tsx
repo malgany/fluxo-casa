@@ -250,7 +250,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
         : "Contas"
     : view === "home"
       ? "Dashboard"
-      : "LanÃ§amentos";
+      : "Lançamentos";
   const headerSubtitle = activeHouseholdScreen
     ? activeHouseholdScreen.mode === "edit"
       ? screenHousehold?.name ?? "Contas e membros"

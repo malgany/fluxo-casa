@@ -7,6 +7,10 @@ export interface SyncResult {
   message: string;
 }
 
+interface SupabaseErrorLike {
+  message?: unknown;
+}
+
 interface EntryRow {
   id: string;
   household_id: string;
@@ -69,7 +73,7 @@ export async function syncNow(householdId: string): Promise<SyncResult> {
     setLastSyncAt(householdId, new Date().toISOString());
     return { ok: true, message: "Sincronizado." };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : "Sincronização falhou." };
+    return { ok: false, message: syncErrorMessage(error) };
   }
 }
 
@@ -109,10 +113,20 @@ async function pushLocalChanges(changes: SyncChanges): Promise<void> {
   await Promise.all(tasks);
 }
 
-async function check<T>(request: PromiseLike<{ error: Error | null; data: T }>): Promise<T> {
+async function check<T>(request: PromiseLike<{ error: SupabaseErrorLike | Error | null; data: T }>): Promise<T> {
   const result = await request;
   if (result.error) throw result.error;
   return result.data;
+}
+
+function syncErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as SupabaseErrorLike).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return "Sincronização falhou.";
 }
 
 function getLastSyncAt(householdId: string): string | undefined {
