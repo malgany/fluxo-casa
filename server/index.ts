@@ -54,6 +54,41 @@ app.post<{ Body: { householdId?: string; email?: string; role?: HouseholdRole } 
     return reply.code(403).send({ message: "Você não pode convidar membros para esta casa." });
   }
 
+  const now = new Date().toISOString();
+  const { data: existingMember, error: existingMemberError } = await supabase
+    .from("household_members")
+    .select("id")
+    .eq("household_id", householdId)
+    .eq("email", email)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (existingMemberError) return reply.code(500).send({ message: existingMemberError.message });
+
+  if (existingMember) {
+    const { error: existingInvitationError } = await supabase
+      .from("household_invitations")
+      .update({ status: "accepted", accepted_at: now, updated_at: now })
+      .eq("household_id", householdId)
+      .eq("email", email)
+      .eq("status", "pending")
+      .is("deleted_at", null);
+
+    if (existingInvitationError) return reply.code(500).send({ message: existingInvitationError.message });
+
+    return { ok: true, emailSent: false, alreadyRegistered: true, alreadyMember: true };
+  }
+
+  const { error: removedMemberError } = await supabase
+    .from("household_members")
+    .update({ role, updated_at: now })
+    .eq("household_id", householdId)
+    .eq("email", email)
+    .neq("role", "owner")
+    .not("deleted_at", "is", null);
+
+  if (removedMemberError) return reply.code(500).send({ message: removedMemberError.message });
+
   const { error: inviteError } = await supabase.from("household_invitations").upsert(
     {
       household_id: householdId,
@@ -61,7 +96,8 @@ app.post<{ Body: { householdId?: string; email?: string; role?: HouseholdRole } 
       role,
       status: "pending",
       invited_by: user.id,
-      updated_at: new Date().toISOString()
+      accepted_at: null,
+      updated_at: now
     },
     { onConflict: "household_id,email" }
   );
@@ -70,11 +106,13 @@ app.post<{ Body: { householdId?: string; email?: string; role?: HouseholdRole } 
   const { error: emailError } = await supabase.auth.admin.inviteUserByEmail(email, {
     redirectTo: process.env.VITE_APP_URL || request.headers.origin
   });
-  if (emailError && !/already|registered|exists/i.test(emailError.message)) {
+  const alreadyRegistered = emailError ? isAlreadyRegisteredError(emailError.message) : false;
+
+  if (emailError && !alreadyRegistered) {
     return reply.code(500).send({ message: emailError.message });
   }
 
-  return { ok: true };
+  return { ok: true, emailSent: !alreadyRegistered, alreadyRegistered, alreadyMember: false };
 });
 
 await app.listen({ host, port });
@@ -95,4 +133,8 @@ function loadLocalEnvFile(): void {
 
 function isSupabaseAdminConfigured(): boolean {
   return Boolean((process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL) && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+function isAlreadyRegisteredError(message: string): boolean {
+  return /already|registered|exists/i.test(message);
 }

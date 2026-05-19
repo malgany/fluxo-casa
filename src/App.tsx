@@ -389,9 +389,9 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
   async function handleInviteMember(householdId: string, email: string, role: HouseholdRole): Promise<boolean> {
     if (!householdId) return false;
     try {
-      await inviteHouseholdMember(householdId, email, role);
+      const invite = await inviteHouseholdMember(householdId, email, role);
       await getHouseholdMembers(householdId);
-      setMessage("Convite enviado.");
+      setMessage(inviteMessage(invite));
       return true;
     } catch (error) {
       setMessage(errorMessage(error, "Não foi possível enviar o convite."));
@@ -984,6 +984,12 @@ function errorMessage(error: unknown, fallback: string): string {
   }
   if (typeof error === "string" && error.trim()) return error;
   return fallback;
+}
+
+function inviteMessage(invite: { emailSent: boolean; alreadyMember: boolean }): string {
+  if (invite.alreadyMember) return "Essa pessoa já faz parte desta conta.";
+  if (invite.emailSent) return "Convite enviado.";
+  return "Convite salvo. Essa pessoa já tem conta; peça para entrar no app para aceitar.";
 }
 
 function translateAuthError(error: unknown): string {

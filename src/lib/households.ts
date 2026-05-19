@@ -163,7 +163,13 @@ export async function removeHouseholdMember(householdId: string, memberId: strin
   return db.householdMembers.where("householdId").equals(householdId).toArray();
 }
 
-export async function inviteHouseholdMember(householdId: string, email: string, role: HouseholdRole): Promise<void> {
+export interface InviteHouseholdMemberResult {
+  emailSent: boolean;
+  alreadyRegistered: boolean;
+  alreadyMember: boolean;
+}
+
+export async function inviteHouseholdMember(householdId: string, email: string, role: HouseholdRole): Promise<InviteHouseholdMemberResult> {
   const supabase = getSupabaseClient();
   const {
     data: { session }
@@ -185,7 +191,13 @@ export async function inviteHouseholdMember(householdId: string, email: string, 
     throw new Error(friendlyHouseholdError(error, "Não foi possível enviar o convite."));
   }
 
+  const result = (await response.json().catch(() => ({ emailSent: true, alreadyRegistered: false }))) as Partial<InviteHouseholdMemberResult>;
   await refreshInvitations([householdId]);
+  return {
+    emailSent: result.emailSent ?? true,
+    alreadyRegistered: result.alreadyRegistered ?? false,
+    alreadyMember: result.alreadyMember ?? false
+  };
 }
 
 export async function getHouseholdMembers(householdId: string): Promise<HouseholdMember[]> {

@@ -51,6 +51,50 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   }
 
   const now = new Date().toISOString();
+  const { data: existingMember, error: existingMemberError } = await supabase
+    .from("household_members")
+    .select("id")
+    .eq("household_id", householdId)
+    .eq("email", email)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (existingMemberError) {
+    response.status(500).json({ message: existingMemberError.message });
+    return;
+  }
+
+  if (existingMember) {
+    const { error: existingInvitationError } = await supabase
+      .from("household_invitations")
+      .update({ status: "accepted", accepted_at: now, updated_at: now })
+      .eq("household_id", householdId)
+      .eq("email", email)
+      .eq("status", "pending")
+      .is("deleted_at", null);
+
+    if (existingInvitationError) {
+      response.status(500).json({ message: existingInvitationError.message });
+      return;
+    }
+
+    response.status(200).json({ ok: true, emailSent: false, alreadyRegistered: true, alreadyMember: true });
+    return;
+  }
+
+  const { error: removedMemberError } = await supabase
+    .from("household_members")
+    .update({ role, updated_at: now })
+    .eq("household_id", householdId)
+    .eq("email", email)
+    .neq("role", "owner")
+    .not("deleted_at", "is", null);
+
+  if (removedMemberError) {
+    response.status(500).json({ message: removedMemberError.message });
+    return;
+  }
+
   const { error: inviteError } = await supabase.from("household_invitations").upsert(
     {
       household_id: householdId,
@@ -58,6 +102,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       role,
       status: "pending",
       invited_by: user.id,
+      accepted_at: null,
       updated_at: now
     },
     { onConflict: "household_id,email" }
@@ -72,16 +117,21 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   const { error: emailError } = await supabase.auth.admin.inviteUserByEmail(email, {
     redirectTo: appUrl || undefined
   });
+  const alreadyRegistered = emailError ? isAlreadyRegisteredError(emailError.message) : false;
 
-  if (emailError && !/already|registered|exists/i.test(emailError.message)) {
+  if (emailError && !alreadyRegistered) {
     response.status(500).json({ message: emailError.message });
     return;
   }
 
-  response.status(200).json({ ok: true });
+  response.status(200).json({ ok: true, emailSent: !alreadyRegistered, alreadyRegistered, alreadyMember: false });
 }
 
 function getBearerToken(header: string | string[] | undefined): string {
   const value = Array.isArray(header) ? header[0] : header;
   return value?.replace(/^Bearer\s+/i, "").trim() ?? "";
+}
+
+function isAlreadyRegisteredError(message: string): boolean {
+  return /already|registered|exists/i.test(message);
 }
