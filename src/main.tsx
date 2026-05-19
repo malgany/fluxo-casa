@@ -3,11 +3,23 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./styles.css";
 
+const APP_UPDATE_CHECK_PARAM = "app-update-check";
+
+removeAppUpdateCheckParam();
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>
 );
+
+function removeAppUpdateCheckParam(): void {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(APP_UPDATE_CHECK_PARAM)) return;
+
+  url.searchParams.delete(APP_UPDATE_CHECK_PARAM);
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
 
 function isEditableTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;

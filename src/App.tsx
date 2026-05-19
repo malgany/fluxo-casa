@@ -32,14 +32,14 @@ import {
 import { active, calculateMonth, defaultSettings, settingsIdForHousehold, type MonthSnapshot, type TimelineItem } from "./domain/finance";
 import { findIconById, searchIconOptions, type ServiceIcon } from "./domain/iconRegistry";
 import { buildInstallmentPlan, buildInstallmentPreview, MAX_INSTALLMENT_COUNT, parseInstallmentCount } from "./domain/installments";
-import type { AppSettings, Entry, FlowKind, HouseholdMember, HouseholdRole, HouseholdSummary, Recurrence } from "./domain/types";
+import type { AppSettings, Entry, FlowKind, HouseholdInvitation, HouseholdMember, HouseholdRole, HouseholdSummary, Recurrence } from "./domain/types";
 
 type View = "home" | "timeline";
 type Sheet = "entry" | "balance" | null;
 type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
 type ThemeMode = "light" | "dark";
 type MaterialIconName = "wallet" | "update" | "export" | "import" | "add";
-type UiIconName = "home" | "list" | "more" | "close" | "delete" | "edit" | "external" | "moon" | "sun" | "lock" | "users" | "info" | "warning";
+type UiIconName = "home" | "list" | "more" | "back" | "close" | "delete" | "edit" | "external" | "moon" | "sun" | "lock" | "users" | "info" | "warning";
 type AuthMode = "sign-in" | "sign-up" | "reset";
 type DialogTone = "info" | "error";
 type HouseholdScreen = { mode: "list" | "create" | "edit"; householdId?: string };
@@ -54,6 +54,7 @@ type AppData = {
   recurrences: Recurrence[];
   settings: AppSettings;
 };
+const APP_UPDATE_CHECK_PARAM = "app-update-check";
 const APP_UPDATE_RELOAD_DELAY_MS = 700;
 const THEME_STORAGE_KEY = "fluxo-casa-theme";
 const SWIPE_ACTION_WIDTH = 108;
@@ -70,6 +71,7 @@ const UI_ICON_PATHS: Record<UiIconName, string[]> = {
   home: ["M3.5 10.5 12 3l8.5 7.5", "M5.5 10v10h13V10", "M9.5 20v-6h5v6"],
   list: ["M8 6h12", "M8 12h12", "M8 18h12", "M4 6h.01", "M4 12h.01", "M4 18h.01"],
   more: ["M12 5h.01", "M12 12h.01", "M12 19h.01"],
+  back: ["M15 18 9 12l6-6", "M9 12h12"],
   close: ["M18 6 6 18", "M6 6l12 12"],
   delete: ["M4 7h16", "M10 11v6", "M14 11v6", "M6 7l1 13h10l1-13", "M9 7V5h6v2"],
   edit: ["M4 20h4L18.5 9.5l-4-4L4 16v4", "M13.5 6.5l4 4"],
@@ -225,6 +227,10 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
     () => (memberHouseholdId ? db.householdMembers.where("householdId").equals(memberHouseholdId).toArray() : Promise.resolve([])),
     [memberHouseholdId]
   ) ?? [];
+  const invitations = useLiveQuery<HouseholdInvitation[]>(
+    () => (memberHouseholdId ? db.householdInvitations.where("householdId").equals(memberHouseholdId).toArray() : Promise.resolve([])),
+    [memberHouseholdId]
+  ) ?? [];
 
   const data = useMemo(
     () => ({
@@ -235,9 +241,11 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
     [entries, recurrences, selectedHouseholdId, settings]
   );
   const activeMembers = members.filter(active);
+  const pendingInvitations = invitations.filter((invitation) => active(invitation) && invitation.status === "pending");
   const activeHouseholdScreen: HouseholdScreen | null =
     householdScreen ?? (!householdLoading && !selectedHouseholdId ? { mode: households.length > 0 ? "list" : "create" } : null);
   const insideSelectedHousehold = Boolean(selectedHouseholdId && !activeHouseholdScreen);
+  const showHouseholdBackButton = Boolean(activeHouseholdScreen && activeHouseholdScreen.mode !== "list" && households.length > 0);
   const screenHousehold = activeHouseholdScreen?.householdId
     ? households.find((household) => household.id === activeHouseholdScreen.householdId)
     : undefined;
@@ -314,7 +322,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
     }
 
     setMessage("Atualizando...");
-    window.setTimeout(() => window.location.reload(), APP_UPDATE_RELOAD_DELAY_MS);
+    window.setTimeout(() => reloadAppWithFreshNavigation(), APP_UPDATE_RELOAD_DELAY_MS);
   }
 
   function handleToggleTheme() {
@@ -378,14 +386,16 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
     }
   }
 
-  async function handleInviteMember(householdId: string, email: string, role: HouseholdRole) {
-    if (!householdId) return;
+  async function handleInviteMember(householdId: string, email: string, role: HouseholdRole): Promise<boolean> {
+    if (!householdId) return false;
     try {
       await inviteHouseholdMember(householdId, email, role);
       await getHouseholdMembers(householdId);
       setMessage("Convite enviado.");
+      return true;
     } catch (error) {
       setMessage(errorMessage(error, "Não foi possível enviar o convite."));
+      return false;
     }
   }
 
@@ -562,10 +572,22 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
       </div>
 
       <header className="top-app-bar">
+        {showHouseholdBackButton && (
+          <div className="top-leading-action">
+            <button className="icon-button" type="button" onClick={() => setHouseholdScreen({ mode: "list" })} aria-label="Voltar para contas" title="Voltar para contas">
+              <UiIcon name="back" />
+            </button>
+          </div>
+        )}
         <div className="top-title">
           <h1>{headerTitle}</h1>
           <span>{headerSubtitle}</span>
         </div>
+        {insideSelectedHousehold && selectedHousehold?.name && (
+          <div className="top-account-label" title={`Conta atual: ${selectedHousehold.name}`}>
+            {selectedHousehold.name}
+          </div>
+        )}
         <div className="app-actions">
           {insideSelectedHousehold && <SyncIndicator state={syncState} hint={syncHint} visible={syncHintVisible} onPress={() => revealSyncHint()} />}
           <button
@@ -643,19 +665,18 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
             currentUserEmail={session.user.email ?? ""}
             currentUserId={session.user.id}
             households={households}
+            invitations={pendingInvitations}
             members={activeMembers}
             screen={activeHouseholdScreen}
             selectedHouseholdId={selectedHouseholdId}
-            onBackToList={() => setHouseholdScreen({ mode: "list" })}
             onCreate={(name) => void handleCreateHousehold(name)}
             onEdit={(householdId) => {
               setHouseholdScreen({ mode: "edit", householdId });
               void getHouseholdMembers(householdId);
             }}
-            onInvite={(householdId, email, role) => void handleInviteMember(householdId, email, role)}
+            onInvite={(householdId, email, role) => handleInviteMember(householdId, email, role)}
             onNew={() => setHouseholdScreen({ mode: "create" })}
             onDelete={(household) => setDeletingHousehold(household)}
-            onRefresh={() => void refreshHouseholdContext(true)}
             onRemoveMember={(householdId, memberId) => void handleRemoveMember(householdId, memberId)}
             onSave={(householdId, name) => void handleSaveHousehold(householdId, name)}
             onSelect={(householdId) => void handleSelectHousehold(householdId)}
@@ -1063,7 +1084,7 @@ function normalizeLocalAssetUrl(value: string): string {
 async function fetchLatestDocumentAssets(): Promise<string[]> {
   try {
     const url = new URL("/", window.location.origin);
-    url.searchParams.set("app-update-check", String(Date.now()));
+    url.searchParams.set(APP_UPDATE_CHECK_PARAM, String(Date.now()));
 
     const response = await fetch(url, {
       cache: "reload",
@@ -1079,11 +1100,19 @@ async function fetchLatestDocumentAssets(): Promise<string[]> {
   }
 }
 
+function reloadAppWithFreshNavigation(): void {
+  const url = new URL(window.location.href);
+  url.searchParams.set(APP_UPDATE_CHECK_PARAM, String(Date.now()));
+  window.location.replace(url.toString());
+}
+
 async function updateServiceWorker(): Promise<boolean> {
   if (!("serviceWorker" in navigator)) return false;
 
   try {
     const registration = (await navigator.serviceWorker.getRegistration()) ?? (await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }));
+    if (registration.waiting) return true;
+
     let foundUpdate = false;
 
     const updateFound = new Promise<boolean>((resolve) => {
@@ -1863,16 +1892,15 @@ function HouseholdManagerPage({
   currentUserEmail,
   currentUserId,
   households,
+  invitations,
   members,
   screen,
   selectedHouseholdId,
-  onBackToList,
   onCreate,
   onDelete,
   onEdit,
   onInvite,
   onNew,
-  onRefresh,
   onRemoveMember,
   onSave,
   onSelect
@@ -1880,30 +1908,33 @@ function HouseholdManagerPage({
   currentUserEmail: string;
   currentUserId: string;
   households: HouseholdSummary[];
+  invitations: HouseholdInvitation[];
   members: HouseholdMember[];
   screen: HouseholdScreen;
   selectedHouseholdId: string;
-  onBackToList: () => void;
   onCreate: (name: string) => void;
   onDelete: (household: HouseholdSummary) => void;
   onEdit: (householdId: string) => void;
-  onInvite: (householdId: string, email: string, role: HouseholdRole) => void;
+  onInvite: (householdId: string, email: string, role: HouseholdRole) => Promise<boolean>;
   onNew: () => void;
-  onRefresh: () => void;
   onRemoveMember: (householdId: string, memberId: string) => void;
   onSave: (householdId: string, name: string) => void;
   onSelect: (householdId: string) => void;
 }) {
   const editingHousehold = screen.householdId ? households.find((household) => household.id === screen.householdId) : undefined;
   const [householdName, setHouseholdName] = useState("");
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<HouseholdRole>("member");
+  const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const canManageMembers = canManageHousehold(editingHousehold);
 
   useEffect(() => {
     setHouseholdName(screen.mode === "edit" ? editingHousehold?.name ?? "" : "");
+    setInviteOpen(false);
     setInviteEmail("");
     setInviteRole("member");
+    setInviteSubmitting(false);
   }, [editingHousehold?.id, editingHousehold?.name, screen.mode]);
 
   function handleCreate(event: FormEvent) {
@@ -1918,12 +1949,18 @@ function HouseholdManagerPage({
     onSave(editingHousehold.id, householdName);
   }
 
-  function handleInvite(event: FormEvent) {
+  async function handleInvite(event: FormEvent) {
     event.preventDefault();
-    if (!editingHousehold || !canManageMembers || !inviteEmail.trim()) return;
-    onInvite(editingHousehold.id, inviteEmail, inviteRole);
+    if (!editingHousehold || !canManageMembers || !inviteEmail.trim() || inviteSubmitting) return;
+
+    setInviteSubmitting(true);
+    const invited = await onInvite(editingHousehold.id, inviteEmail, inviteRole);
+    setInviteSubmitting(false);
+    if (!invited) return;
+
     setInviteEmail("");
     setInviteRole("member");
+    setInviteOpen(false);
   }
 
   const identity = (
@@ -1983,11 +2020,6 @@ function HouseholdManagerPage({
   if (screen.mode === "create") {
     return (
       <div className="household-manager">
-        {households.length > 0 && (
-          <button className="breadcrumb-button" type="button" onClick={onBackToList}>
-            Contas
-          </button>
-        )}
         {identity}
         <form className="household-form" onSubmit={handleCreate}>
           <label>
@@ -2005,9 +2037,6 @@ function HouseholdManagerPage({
   if (!editingHousehold) {
     return (
       <div className="household-manager">
-        <button className="breadcrumb-button" type="button" onClick={onBackToList}>
-          Contas
-        </button>
         <div className="empty-state compact">Conta não encontrada.</div>
       </div>
     );
@@ -2016,9 +2045,6 @@ function HouseholdManagerPage({
   if (!canManageMembers) {
     return (
       <div className="household-manager">
-        <button className="breadcrumb-button" type="button" onClick={onBackToList}>
-          Contas
-        </button>
         {identity}
         <div className="household-form">
           <div className="household-current">
@@ -2035,9 +2061,6 @@ function HouseholdManagerPage({
 
   return (
     <div className="household-manager">
-      <button className="breadcrumb-button" type="button" onClick={onBackToList}>
-        Contas
-      </button>
       {identity}
       <form className="household-form" onSubmit={handleSave}>
         <label>
@@ -2057,33 +2080,55 @@ function HouseholdManagerPage({
       <div className="member-section">
         <div className="section-title">
           <span>Membros</span>
-          <button className="text-button" type="button" onClick={onRefresh}>
-            Atualizar
-          </button>
+          {canManageMembers && (
+            <button className="text-button icon-text-button" type="button" onClick={() => setInviteOpen(true)}>
+              <MaterialIcon name="add" className="button-icon" />
+              Adicionar
+            </button>
+          )}
         </div>
-        <div className="member-list">
-          {members.length === 0 ? (
+        <div className="member-table">
+          {members.length === 0 && invitations.length === 0 ? (
             <div className="empty-state compact">Nenhum membro carregado.</div>
           ) : (
-            members.map((member) => {
-              const canRemove = canManageMembers && member.userId !== currentUserId && member.role !== "owner";
-              return (
-                <div key={member.id} className="member-row">
-                  <span>{member.email || member.userId}</span>
-                  <small>{roleLabel(member.role)}</small>
-                  {canRemove && (
-                    <button className="danger-text-button" type="button" onClick={() => onRemoveMember(editingHousehold.id, member.id)}>
-                      Remover
-                    </button>
-                  )}
+            <>
+              {members.map((member) => {
+                const canRemove = canManageMembers && member.userId !== currentUserId && member.role !== "owner";
+                return (
+                  <div key={member.id} className="member-row">
+                    <div className="member-main">
+                      <span className="member-email">{member.email || member.userId}</span>
+                      <div className="member-meta">
+                        <span className="role-chip">{roleLabel(member.role)}</span>
+                      </div>
+                    </div>
+                    {canRemove && (
+                      <button className="danger-text-button member-remove-button" type="button" onClick={() => onRemoveMember(editingHousehold.id, member.id)}>
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {invitations.map((invitation) => (
+                <div key={invitation.id} className="member-row pending">
+                  <div className="member-main">
+                    <span className="member-email">{invitation.email}</span>
+                    <div className="member-meta">
+                      <span className="role-chip">{roleLabel(invitation.role)}</span>
+                      <span className="status-chip">Convidado</span>
+                    </div>
+                  </div>
                 </div>
-              );
-            })
+              ))}
+            </>
           )}
         </div>
       </div>
 
-      <form className="household-form" onSubmit={handleInvite}>
+      {inviteOpen && (
+        <BottomSheet title="Adicionar membro" onClose={() => { if (!inviteSubmitting) setInviteOpen(false); }}>
+          <form className="sheet-form" onSubmit={handleInvite}>
         <label>
           Convidar por e-mail
           <input
@@ -2091,20 +2136,24 @@ function HouseholdManagerPage({
             onChange={(event) => setInviteEmail(event.target.value)}
             type="email"
             placeholder="pessoa@email.com"
-            disabled={!canManageMembers}
+            disabled={!canManageMembers || inviteSubmitting}
+            autoFocus
+            required
           />
         </label>
         <label>
           Permissão
-          <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as HouseholdRole)} disabled={!canManageMembers}>
+          <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as HouseholdRole)} disabled={!canManageMembers || inviteSubmitting}>
             <option value="member">Membro</option>
             <option value="admin">Administrador</option>
           </select>
         </label>
-        <button className="filled-button" type="submit" disabled={!canManageMembers}>
-          Enviar convite
+        <button className="filled-button" type="submit" disabled={!canManageMembers || inviteSubmitting}>
+          {inviteSubmitting ? "Enviando..." : "Enviar convite"}
         </button>
-      </form>
+          </form>
+        </BottomSheet>
+      )}
     </div>
   );
 }

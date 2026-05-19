@@ -1,6 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
 import { nowIso } from "../domain/dates";
-import type { Household, HouseholdMember, HouseholdRole, HouseholdSummary } from "../domain/types";
+import type { Household, HouseholdInvitation, HouseholdMember, HouseholdRole, HouseholdSummary, InvitationStatus } from "../domain/types";
 import { db } from "./db";
 import { getSupabaseClient } from "./supabase";
 
@@ -21,6 +21,19 @@ interface HouseholdMemberRow {
   user_id: string;
   email: string | null;
   role: HouseholdRole;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+interface HouseholdInvitationRow {
+  id: string;
+  household_id: string;
+  email: string;
+  role: HouseholdRole;
+  status: InvitationStatus;
+  invited_by: string;
+  accepted_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -48,7 +61,7 @@ export async function loadHouseholdContext(session: Session): Promise<HouseholdC
 
   const households = await fetchHouseholds();
   await saveHouseholdsLocally(households);
-  if (households.length > 0) await refreshMembers(households.map((household) => household.id));
+  if (households.length > 0) await refreshHouseholdPeople(households.map((household) => household.id));
 
   const stored = getSelectedHouseholdId();
   const selectedHouseholdId = households.some((household) => household.id === stored) ? stored : households[0]?.id ?? "";
@@ -86,7 +99,7 @@ export async function createHousehold(name: string): Promise<HouseholdContext> {
 
   const households = await fetchHouseholds();
   await saveHouseholdsLocally(households);
-  await refreshMembers(households.map((household) => household.id));
+  await refreshHouseholdPeople(households.map((household) => household.id));
 
   const created = households.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   const selectedHouseholdId = created?.id ?? households[0]?.id ?? "";
@@ -106,7 +119,7 @@ export async function updateHouseholdName(householdId: string, name: string): Pr
 
   const households = await fetchHouseholds();
   await saveHouseholdsLocally(households);
-  await refreshMembers(households.map((household) => household.id));
+  await refreshHouseholdPeople(households.map((household) => household.id));
 
   const selectedHouseholdId = households.some((household) => household.id === householdId) ? householdId : households[0]?.id ?? "";
   setSelectedHouseholdId(selectedHouseholdId);
@@ -130,7 +143,7 @@ export async function deleteHousehold(householdId: string): Promise<HouseholdCon
 
   const households = await fetchHouseholds();
   await saveHouseholdsLocally(households);
-  if (households.length > 0) await refreshMembers(households.map((household) => household.id));
+  if (households.length > 0) await refreshHouseholdPeople(households.map((household) => household.id));
 
   const stored = getSelectedHouseholdId();
   const selectedHouseholdId = households.some((household) => household.id === stored) ? stored : households[0]?.id ?? "";
@@ -146,7 +159,7 @@ export async function removeHouseholdMember(householdId: string, memberId: strin
   });
   if (error) throw new Error(friendlyHouseholdError(error, "Não foi possível remover o membro."));
 
-  await refreshMembers([householdId]);
+  await refreshHouseholdPeople([householdId]);
   return db.householdMembers.where("householdId").equals(householdId).toArray();
 }
 
@@ -171,10 +184,12 @@ export async function inviteHouseholdMember(householdId: string, email: string, 
     const error = (await response.json().catch(() => ({ message: "Não foi possível enviar o convite." }))) as { message?: string };
     throw new Error(friendlyHouseholdError(error, "Não foi possível enviar o convite."));
   }
+
+  await refreshInvitations([householdId]);
 }
 
 export async function getHouseholdMembers(householdId: string): Promise<HouseholdMember[]> {
-  await refreshMembers([householdId]);
+  await refreshHouseholdPeople([householdId]);
   return db.householdMembers.where("householdId").equals(householdId).toArray();
 }
 
@@ -199,6 +214,19 @@ async function refreshMembers(householdIds: string[]): Promise<void> {
   if (error) throw new Error(friendlyHouseholdError(error, "Não foi possível carregar os membros."));
 
   await db.householdMembers.bulkPut(((data ?? []) as HouseholdMemberRow[]).map(memberFromRow));
+}
+
+async function refreshInvitations(householdIds: string[]): Promise<void> {
+  if (householdIds.length === 0) return;
+
+  const { data, error } = await getSupabaseClient().from("household_invitations").select("*").in("household_id", householdIds);
+  if (error) throw new Error(friendlyHouseholdError(error, "NÃ£o foi possÃ­vel carregar os convites."));
+
+  await db.householdInvitations.bulkPut(((data ?? []) as HouseholdInvitationRow[]).map(invitationFromRow));
+}
+
+async function refreshHouseholdPeople(householdIds: string[]): Promise<void> {
+  await Promise.all([refreshMembers(householdIds), refreshInvitations(householdIds)]);
 }
 
 async function saveHouseholdsLocally(households: HouseholdSummary[]): Promise<void> {
@@ -232,6 +260,22 @@ function memberFromRow(row: HouseholdMemberRow): HouseholdMember {
     userId: row.user_id,
     email: row.email ?? undefined,
     role: row.role,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at ?? undefined,
+    syncStatus: "synced"
+  };
+}
+
+function invitationFromRow(row: HouseholdInvitationRow): HouseholdInvitation {
+  return {
+    id: row.id,
+    householdId: row.household_id,
+    email: row.email,
+    role: row.role,
+    status: row.status,
+    invitedBy: row.invited_by,
+    acceptedAt: row.accepted_at ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at ?? undefined,

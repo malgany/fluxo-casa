@@ -1,4 +1,5 @@
 const CACHE_NAME = "fluxo-casa-v5";
+const UPDATE_CHECK_PARAM = "app-update-check";
 const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -24,8 +25,9 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
 
-  if (url.searchParams.has("app-update-check")) {
-    event.respondWith(fetch(new Request(request, { cache: "reload" })));
+  if (url.searchParams.has(UPDATE_CHECK_PARAM)) {
+    const freshRequest = new Request(request, { cache: "reload" });
+    event.respondWith(request.mode === "navigate" ? networkFirstNavigation(freshRequest) : fetch(freshRequest));
     return;
   }
 
