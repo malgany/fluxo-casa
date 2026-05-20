@@ -626,6 +626,14 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
               <UiIcon name={theme === "dark" ? "sun" : "moon"} />
               <span>{theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}</span>
             </button>
+            <button role="menuitem" type="button" onClick={() => { window.location.href = "/privacy.html"; }}>
+              <UiIcon name="external" />
+              <span>Privacidade</span>
+            </button>
+            <button role="menuitem" type="button" onClick={() => { window.location.href = "/account-deletion.html"; }}>
+              <UiIcon name="delete" />
+              <span>Excluir minha conta</span>
+            </button>
             <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); onSignOut(); }}>
               <UiIcon name="lock" />
               <span>Sair</span>
@@ -889,6 +897,10 @@ function AuthGate({ checking = false, configured }: { checking?: boolean; config
             <button className="text-button" type="button" onClick={() => setMode(mode === "reset" ? "sign-in" : "reset")}>
               {mode === "reset" ? "Voltar para login" : "Esqueci minha senha"}
             </button>
+            <div className="access-links">
+              <a href="/privacy.html">Politica de privacidade</a>
+              <a href="/account-deletion.html">Excluir conta</a>
+            </div>
             {status && <p role="status">{status}</p>}
           </>
         )}
