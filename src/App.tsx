@@ -32,7 +32,7 @@ import {
 import { active, calculateMonth, defaultSettings, settingsIdForHousehold, type MonthSnapshot, type TimelineItem } from "./domain/finance";
 import { findIconById, searchIconOptions, type ServiceIcon } from "./domain/iconRegistry";
 import { buildInstallmentPlan, buildInstallmentPreview, MAX_INSTALLMENT_COUNT, parseInstallmentCount } from "./domain/installments";
-import type { AppSettings, Entry, FlowKind, HouseholdInvitation, HouseholdMember, HouseholdRole, HouseholdSummary, Recurrence } from "./domain/types";
+import type { AppSettings, Entry, FlowKind, Household, HouseholdInvitation, HouseholdMember, HouseholdRole, HouseholdSummary, Recurrence } from "./domain/types";
 
 type View = "home" | "timeline";
 type Sheet = "entry" | "balance" | null;
@@ -54,9 +54,22 @@ type AppData = {
   recurrences: Recurrence[];
   settings: AppSettings;
 };
+type DemoHouseholdContext = {
+  households: HouseholdSummary[];
+  selectedHouseholdId: string;
+};
 const APP_UPDATE_CHECK_PARAM = "app-update-check";
 const APP_UPDATE_RELOAD_DELAY_MS = 700;
 const THEME_STORAGE_KEY = "fluxo-casa-theme";
+const DEMO_USER_ID = "demo-user";
+const DEMO_EMAIL = "demo@fluxocasa.local";
+const DEMO_HOUSEHOLD_ID = "demo-household";
+const DEMO_SESSION = {
+  user: {
+    id: DEMO_USER_ID,
+    email: DEMO_EMAIL
+  }
+} as unknown as Session;
 const SWIPE_ACTION_WIDTH = 108;
 const SWIPE_TRIGGER_DISTANCE = 72;
 const INSTALLMENT_COUNT_OPTIONS = Array.from({ length: MAX_INSTALLMENT_COUNT - 1 }, (_, index) => index + 2);
@@ -88,6 +101,7 @@ function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [passwordSetup, setPasswordSetup] = useState(() => isPasswordSetupUrl());
+  const [demoMode, setDemoMode] = useState(false);
   const supabaseConfigured = isSupabaseConfigured();
 
   useEffect(() => {
@@ -120,18 +134,23 @@ function App() {
   }, [supabaseConfigured]);
 
   async function handleSignOut() {
+    if (demoMode) {
+      setDemoMode(false);
+      return;
+    }
+
     await getSupabaseClient().auth.signOut();
     setSession(null);
   }
 
-  if (checkingSession) return <AuthGate checking configured={supabaseConfigured} />;
-  if (!session) return <AuthGate configured={supabaseConfigured} />;
-  if (passwordSetup) return <PasswordSetupGate onDone={() => setPasswordSetup(false)} />;
+  if (checkingSession) return <AuthGate checking configured={supabaseConfigured} onDemo={() => setDemoMode(true)} />;
+  if (!session && !demoMode) return <AuthGate configured={supabaseConfigured} onDemo={() => setDemoMode(true)} />;
+  if (passwordSetup && !demoMode) return <PasswordSetupGate onDone={() => setPasswordSetup(false)} />;
 
-  return <FinanceApp session={session} onSignOut={() => void handleSignOut()} />;
+  return <FinanceApp session={demoMode ? DEMO_SESSION : session ?? DEMO_SESSION} demoMode={demoMode} onSignOut={() => void handleSignOut()} />;
 }
 
-function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
+function FinanceApp({ session, demoMode = false, onSignOut }: { session: Session; demoMode?: boolean; onSignOut: () => void }) {
   const [view, setView] = useState<View>("home");
   const currentMonth = monthKey();
   const [timelineMonth, setTimelineMonth] = useState(currentMonth);
@@ -156,7 +175,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
 
   useEffect(() => {
     void refreshHouseholdContext();
-  }, [session.user.id]);
+  }, [demoMode, session.user.id]);
 
   useEffect(() => {
     if (!selectedHouseholdId) return;
@@ -333,6 +352,14 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
   async function refreshHouseholdContext(showMessage = false) {
     setHouseholdLoading(true);
     try {
+      if (demoMode) {
+        const context = await ensureDemoHousehold();
+        setHouseholds(context.households);
+        setSelectedHouseholdId(context.selectedHouseholdId);
+        if (showMessage) setMessage("Modo demo pronto.");
+        return;
+      }
+
       const context = await loadHouseholdContext(session);
       setHouseholds(context.households);
       setSelectedHouseholdId(context.selectedHouseholdId);
@@ -363,6 +390,15 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
 
   async function handleCreateHousehold(name: string) {
     try {
+      if (demoMode) {
+        const context = await createDemoHousehold(name);
+        setHouseholds(context.households);
+        setSelectedHouseholdId(context.selectedHouseholdId);
+        setMessage("Conta criada.");
+        setHouseholdScreen({ mode: "edit", householdId: context.selectedHouseholdId });
+        return;
+      }
+
       const context = await createHousehold(name);
       setHouseholds(context.households);
       setSelectedHouseholdId(context.selectedHouseholdId);
@@ -377,6 +413,14 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
 
   async function handleSaveHousehold(householdId: string, name: string) {
     try {
+      if (demoMode) {
+        const context = await updateDemoHouseholdName(householdId, name);
+        setHouseholds(context.households);
+        setSelectedHouseholdId(context.selectedHouseholdId);
+        setMessage("Conta salva.");
+        return;
+      }
+
       const context = await updateHouseholdName(householdId, name);
       setHouseholds(context.households);
       setSelectedHouseholdId(context.selectedHouseholdId);
@@ -388,6 +432,11 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
 
   async function handleInviteMember(householdId: string, email: string, role: HouseholdRole): Promise<boolean> {
     if (!householdId) return false;
+    if (demoMode) {
+      setMessage("Convites ficam desativados no modo demo.");
+      return false;
+    }
+
     try {
       const invite = await inviteHouseholdMember(householdId, email, role);
       await getHouseholdMembers(householdId);
@@ -400,6 +449,11 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
   }
 
   async function handleRemoveMember(householdId: string, memberId: string) {
+    if (demoMode) {
+      setMessage("Membros ficam fixos no modo demo.");
+      return;
+    }
+
     try {
       await removeHouseholdMember(householdId, memberId);
       setMessage("Membro removido.");
@@ -412,6 +466,17 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
     if (!deletingHousehold) return;
 
     try {
+      if (demoMode) {
+        const context = await deleteDemoHousehold(deletingHousehold.id);
+        setHouseholds(context.households);
+        setSelectedHouseholdId(context.selectedHouseholdId);
+        setDeletingHousehold(null);
+        setHouseholdScreen({ mode: context.households.length > 0 ? "list" : "create" });
+        setSheet(null);
+        setMessage("Conta excluida.");
+        return;
+      }
+
       const context = await deleteHousehold(deletingHousehold.id);
       setHouseholds(context.households);
       setSelectedHouseholdId(context.selectedHouseholdId);
@@ -437,6 +502,13 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
 
   async function runSync(showHint: boolean, targetHouseholdId = selectedHouseholdId) {
     if (!targetHouseholdId) return;
+    if (demoMode) {
+      setSyncState("synced");
+      setSyncHint("Modo demo");
+      if (showHint) setSyncHintVisible(true);
+      return;
+    }
+
     if (syncingRef.current) {
       if (showHint) revealSyncHint("Atualizando...");
       return;
@@ -680,7 +752,7 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
             onCreate={(name) => void handleCreateHousehold(name)}
             onEdit={(householdId) => {
               setHouseholdScreen({ mode: "edit", householdId });
-              void getHouseholdMembers(householdId);
+              if (!demoMode) void getHouseholdMembers(householdId);
             }}
             onInvite={(householdId, email, role) => handleInviteMember(householdId, email, role)}
             onNew={() => setHouseholdScreen({ mode: "create" })}
@@ -758,7 +830,166 @@ function FinanceApp({ session, onSignOut }: { session: Session; onSignOut: () =>
   );
 }
 
-function AuthGate({ checking = false, configured }: { checking?: boolean; configured: boolean }) {
+async function ensureDemoHousehold(): Promise<DemoHouseholdContext> {
+  const now = new Date().toISOString();
+  const currentMonth = monthKey();
+  const existing = await db.households.get(DEMO_HOUSEHOLD_ID);
+
+  if (!existing || existing.deletedAt) {
+    await db.households.put({
+      id: DEMO_HOUSEHOLD_ID,
+      name: "Casa demo",
+      ownerId: DEMO_USER_ID,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      syncStatus: "synced"
+    });
+    await db.householdMembers.put({
+      id: "demo-member-owner",
+      householdId: DEMO_HOUSEHOLD_ID,
+      userId: DEMO_USER_ID,
+      email: DEMO_EMAIL,
+      role: "owner",
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: "synced"
+    });
+  }
+
+  const settings = {
+    ...defaultSettings(DEMO_HOUSEHOLD_ID, todayIso()),
+    openingBalance: 1200,
+    openingDate: firstDayOfMonth(currentMonth),
+    syncStatus: "synced" as const
+  };
+  await db.settings.put(settings);
+
+  const existingEntries = await db.entries.where("householdId").equals(DEMO_HOUSEHOLD_ID).count();
+  if (existingEntries === 0) {
+    await db.entries.bulkPut([
+      demoEntry("demo-entry-salary", "in", "Salario demo", 5200, firstDayOfMonth(currentMonth), now),
+      demoEntry("demo-entry-market", "out", "Mercado", 640, previousDay(todayIso()), now),
+      demoEntry("demo-entry-rent", "out", "Aluguel", 1800, todayIso(), now)
+    ]);
+  }
+
+  const existingRecurrences = await db.recurrences.where("householdId").equals(DEMO_HOUSEHOLD_ID).count();
+  if (existingRecurrences === 0) {
+    await db.recurrences.put({
+      id: "demo-recurrence-internet",
+      householdId: DEMO_HOUSEHOLD_ID,
+      kind: "out",
+      title: "Internet",
+      amount: 129.9,
+      dayOfMonth: 10,
+      startsOn: firstDayOfMonth(currentMonth),
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: "synced"
+    });
+  }
+
+  storeSelectedHouseholdId(DEMO_HOUSEHOLD_ID);
+  return loadDemoHouseholds(DEMO_HOUSEHOLD_ID);
+}
+
+async function createDemoHousehold(name: string): Promise<DemoHouseholdContext> {
+  const cleanName = name.trim() || "Casa demo";
+  const household = {
+    ...createBase("household"),
+    name: cleanName,
+    ownerId: DEMO_USER_ID,
+    syncStatus: "synced" as const
+  } satisfies Household;
+  const member = {
+    ...createBase("member"),
+    householdId: household.id,
+    userId: DEMO_USER_ID,
+    email: DEMO_EMAIL,
+    role: "owner",
+    syncStatus: "synced" as const
+  } satisfies HouseholdMember;
+
+  await db.households.put(household);
+  await db.householdMembers.put(member);
+  await ensureSettings(household.id);
+  storeSelectedHouseholdId(household.id);
+  return loadDemoHouseholds(household.id);
+}
+
+async function updateDemoHouseholdName(householdId: string, name: string): Promise<DemoHouseholdContext> {
+  const cleanName = name.trim();
+  if (!householdId || !cleanName) throw new Error("Informe o nome da conta.");
+
+  await db.households.update(householdId, {
+    name: cleanName,
+    updatedAt: new Date().toISOString(),
+    syncStatus: "synced"
+  });
+
+  return loadDemoHouseholds(householdId);
+}
+
+async function deleteDemoHousehold(householdId: string): Promise<DemoHouseholdContext> {
+  const now = new Date().toISOString();
+  await db.households.update(householdId, {
+    deletedAt: now,
+    updatedAt: now,
+    syncStatus: "synced"
+  });
+
+  const members = await db.householdMembers.where("householdId").equals(householdId).toArray();
+  await db.householdMembers.bulkPut(
+    members.map((member) => ({
+      ...member,
+      deletedAt: now,
+      updatedAt: now,
+      syncStatus: "synced" as const
+    }))
+  );
+
+  return loadDemoHouseholds("");
+}
+
+async function loadDemoHouseholds(preferredHouseholdId: string): Promise<DemoHouseholdContext> {
+  const [households, members] = await Promise.all([db.households.toArray(), db.householdMembers.toArray()]);
+  const summaries = households
+    .filter(active)
+    .map((household) => {
+      const member = members.find((item) => item.householdId === household.id && item.userId === DEMO_USER_ID && !item.deletedAt);
+      if (!member) return undefined;
+      return {
+        id: household.id,
+        name: household.name,
+        role: member.role,
+        ownerId: household.ownerId,
+        createdAt: household.createdAt,
+        updatedAt: household.updatedAt
+      };
+    })
+    .filter(Boolean) as HouseholdSummary[];
+  const selectedHouseholdId = summaries.some((household) => household.id === preferredHouseholdId) ? preferredHouseholdId : summaries[0]?.id ?? "";
+  storeSelectedHouseholdId(selectedHouseholdId);
+
+  return { households: summaries, selectedHouseholdId };
+}
+
+function demoEntry(id: string, kind: FlowKind, title: string, amount: number, date: string, now: string): Entry {
+  return {
+    id,
+    householdId: DEMO_HOUSEHOLD_ID,
+    kind,
+    title,
+    amount,
+    date,
+    createdAt: now,
+    updatedAt: now,
+    syncStatus: "synced"
+  };
+}
+
+function AuthGate({ checking = false, configured, onDemo }: { checking?: boolean; configured: boolean; onDemo: () => void }) {
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -893,6 +1124,9 @@ function AuthGate({ checking = false, configured }: { checking?: boolean; config
             )}
             <button className="filled-button" type="submit" disabled={submitting}>
               {submitting ? "Aguarde..." : mode === "reset" ? "Enviar e-mail" : mode === "sign-up" ? "Criar conta" : "Entrar"}
+            </button>
+            <button className="tonal-button demo-access-button" type="button" onClick={onDemo}>
+              Modo demo
             </button>
             <button className="text-button" type="button" onClick={() => setMode(mode === "reset" ? "sign-in" : "reset")}>
               {mode === "reset" ? "Voltar para login" : "Esqueci minha senha"}

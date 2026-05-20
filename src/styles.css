@@ -264,6 +264,10 @@ textarea {
   outline: 0;
 }
 
+.demo-access-button {
+  width: 100%;
+}
+
 .auth-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
