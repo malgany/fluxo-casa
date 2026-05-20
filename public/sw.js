@@ -1,6 +1,15 @@
-const CACHE_NAME = "fluxo-casa-v5";
+const CACHE_NAME = "fluxo-casa-v6";
 const UPDATE_CHECK_PARAM = "app-update-check";
-const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
+const APP_SHELL = [
+  "/",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/icon.svg",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/icons/maskable-512.png",
+  "/icons/apple-touch-icon.png"
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
