@@ -3,7 +3,12 @@ dist/
 .vite/
 data/
 *.log
-android-twa/
+android-twa/.gradle/
+android-twa/build/
+android-twa/app/build/
+android-twa/local.properties
+android-twa/*.aab
+android-twa/*.apk
 .env
 .env.local
 .env.*
