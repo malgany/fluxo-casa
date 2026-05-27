@@ -5,6 +5,7 @@ import { db } from "./db";
 import { getSupabaseClient } from "./supabase";
 
 const selectedHouseholdKey = "fluxo-casa-selected-household";
+const defaultHouseholdName = "Conta";
 
 interface HouseholdRow {
   id: string;
@@ -59,7 +60,12 @@ export async function loadHouseholdContext(session: Session): Promise<HouseholdC
   const { error: invitationError } = await supabase.rpc("accept_pending_invitations");
   if (invitationError) throw new Error(friendlyHouseholdError(invitationError, "Não foi possível verificar convites agora."));
 
-  const households = await fetchHouseholds();
+  let households = await fetchHouseholds();
+  if (households.length === 0) {
+    await createDefaultHousehold();
+    households = await fetchHouseholds();
+  }
+
   await saveHouseholdsLocally(households);
   if (households.length > 0) await refreshHouseholdPeople(households.map((household) => household.id));
 
@@ -217,6 +223,11 @@ async function fetchHouseholds(): Promise<HouseholdSummary[]> {
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }));
+}
+
+async function createDefaultHousehold(): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("create_household", { household_name: defaultHouseholdName });
+  if (error) throw new Error(friendlyHouseholdError(error, "Não foi possível criar sua conta inicial."));
 }
 
 async function refreshMembers(householdIds: string[]): Promise<void> {

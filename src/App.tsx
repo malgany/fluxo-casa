@@ -61,6 +61,7 @@ type DemoHouseholdContext = {
 const APP_UPDATE_CHECK_PARAM = "app-update-check";
 const APP_UPDATE_RELOAD_DELAY_MS = 700;
 const DEMO_LOADING_DELAY_MS = 3000;
+const ANDROID_DOWNLOAD_URL = "https://play.google.com/store/apps/details?id=br.com.fluxocasa";
 const THEME_STORAGE_KEY = "fluxo-casa-theme";
 const DEMO_USER_ID = "demo-user";
 const DEMO_EMAIL = "demo@fluxocasa.local";
@@ -110,6 +111,7 @@ function App() {
   const [demoMode, setDemoMode] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() => readInitialTheme());
   const supabaseConfigured = isSupabaseConfigured();
+  const productionDesktopGate = productionDesktopGateMode();
 
   useEffect(() => {
     const appliedTheme = theme === "dark" ? "dark" : "light";
@@ -157,6 +159,9 @@ function App() {
     await getSupabaseClient().auth.signOut();
     setSession(null);
   }
+
+  if (productionDesktopGate === "confirmation") return <DesktopConfirmationPage />;
+  if (productionDesktopGate === "landing") return <DesktopLandingPage />;
 
   if (checkingSession) return <AuthGate checking configured={supabaseConfigured} onDemo={() => setDemoMode(true)} />;
   if (!session && !demoMode) return <AuthGate configured={supabaseConfigured} onDemo={() => setDemoMode(true)} />;
@@ -1228,6 +1233,44 @@ function PasswordSetupGate({ onDone }: { onDone: () => void }) {
   );
 }
 
+function DesktopLandingPage() {
+  return (
+    <main className="desktop-gate">
+      <section className="desktop-gate-panel">
+        <div className="desktop-gate-mark" aria-hidden="true">
+          <UiIcon name="home" />
+        </div>
+        <p>Fluxo Casa</p>
+        <h1>Seu app de finanças da casa fica melhor no celular.</h1>
+        <span>
+          Esta versão foi pensada para uso mobile. Baixe o app no Android para cadastrar lançamentos, acompanhar o saldo e manter tudo sincronizado.
+        </span>
+        <a className="filled-button desktop-gate-action" href={ANDROID_DOWNLOAD_URL} target="_blank" rel="noreferrer">
+          Baixar para Android
+        </a>
+      </section>
+    </main>
+  );
+}
+
+function DesktopConfirmationPage() {
+  return (
+    <main className="desktop-gate confirmation">
+      <section className="desktop-gate-panel">
+        <div className="desktop-gate-mark success" aria-hidden="true">
+          <SyncIcon state="synced" />
+        </div>
+        <p>Fluxo Casa</p>
+        <h1>Conta confirmada com sucesso.</h1>
+        <span>
+          Seu cadastro foi confirmado. Abra o Fluxo Casa no celular para continuar; sua conta inicial será preparada automaticamente.
+        </span>
+        <small>Você já pode fechar esta aba.</small>
+      </section>
+    </main>
+  );
+}
+
 function MaterialDialog({
   tone,
   title,
@@ -1307,6 +1350,24 @@ function isPasswordSetupUrl(): boolean {
   if (typeof window === "undefined") return false;
   const value = `${window.location.hash} ${window.location.search}`;
   return value.includes("type=recovery") || value.includes("type=invite");
+}
+
+function productionDesktopGateMode(): "confirmation" | "landing" | null {
+  if (!import.meta.env.PROD || typeof window === "undefined") return null;
+  if (isMobileLikeDevice()) return null;
+  return isAuthConfirmationUrl() ? "confirmation" : "landing";
+}
+
+function isAuthConfirmationUrl(): boolean {
+  const value = `${window.location.hash} ${window.location.search}`.toLowerCase();
+  if (value.includes("type=recovery") || value.includes("type=invite")) return false;
+  return value.includes("type=signup") || value.includes("type=email_change") || value.includes("access_token=") || value.includes("code=");
+}
+
+function isMobileLikeDevice(): boolean {
+  const userAgent = navigator.userAgent.toLowerCase();
+  if (/android|iphone|ipad|ipod|mobile|windows phone/.test(userAgent)) return true;
+  return navigator.maxTouchPoints > 1 && window.matchMedia("(max-width: 900px)").matches;
 }
 
 function readInitialTheme(): ThemeMode {

@@ -460,6 +460,83 @@ textarea {
   font-weight: 500;
 }
 
+.desktop-gate {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 40px 24px;
+  background: var(--surface-container);
+}
+
+.desktop-gate-panel {
+  display: grid;
+  width: min(100%, 560px);
+  justify-items: start;
+  gap: 18px;
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 72%, transparent);
+  border-radius: 28px;
+  padding: 36px;
+  background: color-mix(in srgb, var(--surface-container-highest) 94%, transparent);
+  box-shadow: var(--filled-card-shadow);
+}
+
+.desktop-gate-mark {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  border-radius: var(--shape-full);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+
+.desktop-gate-mark.success {
+  background: color-mix(in srgb, var(--green) 18%, var(--surface-container-highest));
+  color: var(--green);
+}
+
+.desktop-gate-panel p,
+.desktop-gate-panel h1,
+.desktop-gate-panel span,
+.desktop-gate-panel small {
+  margin: 0;
+}
+
+.desktop-gate-panel p {
+  color: var(--primary);
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.desktop-gate-panel h1 {
+  max-width: 12ch;
+  color: var(--on-surface);
+  font-size: clamp(2.4rem, 5vw, 4.4rem);
+  font-weight: 600;
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.desktop-gate-panel span {
+  max-width: 46ch;
+  color: var(--on-surface-variant);
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.desktop-gate-panel small {
+  color: var(--on-surface-variant);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.desktop-gate-action {
+  min-width: 220px;
+  margin-top: 8px;
+  text-decoration: none;
+}
+
 .password-field {
   position: relative;
   display: block;
