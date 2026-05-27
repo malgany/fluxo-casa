@@ -37,9 +37,9 @@ import type { AppSettings, Entry, FlowKind, Household, HouseholdInvitation, Hous
 type View = "home" | "timeline";
 type Sheet = "entry" | "balance" | null;
 type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
-type ThemeMode = "light" | "dark";
-type MaterialIconName = "wallet" | "update" | "export" | "import" | "add";
-type UiIconName = "home" | "list" | "more" | "back" | "close" | "delete" | "edit" | "external" | "moon" | "sun" | "lock" | "users" | "info" | "warning";
+type ThemeMode = "light-new" | "light" | "dark";
+type MaterialIconName = "wallet" | "update" | "export" | "import" | "add" | "lightMode" | "routine" | "darkMode";
+type UiIconName = "home" | "list" | "more" | "back" | "close" | "delete" | "edit" | "external" | "moon" | "sun" | "lock" | "users" | "info" | "warning" | "eye" | "eyeOff";
 type AuthMode = "sign-in" | "sign-up" | "reset";
 type DialogTone = "info" | "error";
 type HouseholdScreen = { mode: "list" | "create" | "edit"; householdId?: string };
@@ -78,7 +78,10 @@ const MATERIAL_ICON_SRC: Record<MaterialIconName, string> = {
   update: "/material-symbols/update.svg",
   export: "/material-symbols/file_download.svg",
   import: "/material-symbols/file_upload.svg",
-  add: "/material-symbols/add.svg"
+  add: "/material-symbols/add.svg",
+  lightMode: "/material-symbols/light_mode.svg",
+  routine: "/material-symbols/routine.svg",
+  darkMode: "/material-symbols/dark_mode.svg"
 };
 const UI_ICON_PATHS: Record<UiIconName, string[]> = {
   home: ["M3.5 10.5 12 3l8.5 7.5", "M5.5 10v10h13V10", "M9.5 20v-6h5v6"],
@@ -93,8 +96,10 @@ const UI_ICON_PATHS: Record<UiIconName, string[]> = {
   users: ["M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20", "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z", "M21 20v-1.2a3.6 3.6 0 0 0-2.7-3.5", "M16 4.4a3.5 3.5 0 0 1 0 6.8"],
   info: ["M12 17v-5", "M12 8h.01", "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"],
   warning: ["M12 9v4", "M12 17h.01", "M10.3 4.4 2.5 18a1.7 1.7 0 0 0 1.5 2.5h16a1.7 1.7 0 0 0 1.5-2.5L13.7 4.4a1.7 1.7 0 0 0-3.4 0Z"],
+  sun: ["M12 4V2", "M12 22v-2", "m4.93 4.93-1.42-1.42", "m20.49 20.49-1.42-1.42", "M4 12H2", "M22 12h-2", "m4.93 19.07-1.42 1.42", "m20.49 3.51-1.42 1.42", "M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"],
   moon: ["M21 14.8A8.5 8.5 0 0 1 9.2 3 7 7 0 1 0 21 14.8Z"],
-  sun: ["M12 4V2", "M12 22v-2", "m4.93 4.93-1.42-1.42", "m20.49 20.49-1.42-1.42", "M4 12H2", "M22 12h-2", "m4.93 19.07-1.42 1.42", "m20.49 3.51-1.42 1.42", "M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"]
+  eye: ["M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z", "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"],
+  eyeOff: ["M3 3l18 18", "M10.6 10.6a3 3 0 0 0 3.8 3.8", "M9.9 5.2A10.8 10.8 0 0 1 12 5c6 0 9.5 7 9.5 7a16 16 0 0 1-2.6 3.5", "M6.4 6.4C3.8 8.1 2.5 12 2.5 12s3.5 7 9.5 7a10.5 10.5 0 0 0 5-1.3"]
 };
 
 function App() {
@@ -102,7 +107,16 @@ function App() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [passwordSetup, setPasswordSetup] = useState(() => isPasswordSetupUrl());
   const [demoMode, setDemoMode] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>(() => readInitialTheme());
   const supabaseConfigured = isSupabaseConfigured();
+
+  useEffect(() => {
+    const appliedTheme = theme === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = appliedTheme;
+    document.documentElement.dataset.themeVariant = theme;
+    document.documentElement.style.colorScheme = appliedTheme;
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     if (!supabaseConfigured) {
@@ -147,10 +161,22 @@ function App() {
   if (!session && !demoMode) return <AuthGate configured={supabaseConfigured} onDemo={() => setDemoMode(true)} />;
   if (passwordSetup && !demoMode) return <PasswordSetupGate onDone={() => setPasswordSetup(false)} />;
 
-  return <FinanceApp session={demoMode ? DEMO_SESSION : session ?? DEMO_SESSION} demoMode={demoMode} onSignOut={() => void handleSignOut()} />;
+  return <FinanceApp session={demoMode ? DEMO_SESSION : session ?? DEMO_SESSION} demoMode={demoMode} theme={theme} setTheme={setTheme} onSignOut={() => void handleSignOut()} />;
 }
 
-function FinanceApp({ session, demoMode = false, onSignOut }: { session: Session; demoMode?: boolean; onSignOut: () => void }) {
+function FinanceApp({
+  session,
+  demoMode = false,
+  theme,
+  setTheme,
+  onSignOut
+}: {
+  session: Session;
+  demoMode?: boolean;
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => void;
+  onSignOut: () => void;
+}) {
   const [view, setView] = useState<View>("home");
   const currentMonth = monthKey();
   const [timelineMonth, setTimelineMonth] = useState(currentMonth);
@@ -159,7 +185,6 @@ function FinanceApp({ session, demoMode = false, onSignOut }: { session: Session
   const [deletingMovement, setDeletingMovement] = useState<MovementTarget | null>(null);
   const [deletingHousehold, setDeletingHousehold] = useState<HouseholdSummary | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [theme, setTheme] = useState<ThemeMode>(() => readInitialTheme());
   const [message, setMessage] = useState("");
   const [syncState, setSyncState] = useState<SyncIndicatorState>("idle");
   const [syncHint, setSyncHint] = useState("Ainda não sincronizado");
@@ -181,12 +206,6 @@ function FinanceApp({ session, demoMode = false, onSignOut }: { session: Session
     if (!selectedHouseholdId) return;
     void ensureSettings(selectedHouseholdId);
   }, [selectedHouseholdId]);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.style.colorScheme = theme;
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
-  }, [theme]);
 
   useEffect(() => {
     if (!import.meta.env.DEV || !("serviceWorker" in navigator)) return undefined;
@@ -342,11 +361,6 @@ function FinanceApp({ session, demoMode = false, onSignOut }: { session: Session
 
     setMessage("Atualizando...");
     window.setTimeout(() => reloadAppWithFreshNavigation(), APP_UPDATE_RELOAD_DELAY_MS);
-  }
-
-  function handleToggleTheme() {
-    setTheme((current) => (current === "dark" ? "light" : "dark"));
-    setMenuOpen(false);
   }
 
   async function refreshHouseholdContext(showMessage = false) {
@@ -690,39 +704,21 @@ function FinanceApp({ session, demoMode = false, onSignOut }: { session: Session
                 </button>
               </>
             )}
-            <button role="menuitem" type="button" onClick={handleCheckUpdates}>
-              <MaterialIcon name="update" className="menu-icon" />
-              <span>Verificar atualizações</span>
-            </button>
-            <button role="menuitem" type="button" onClick={handleToggleTheme}>
-              <UiIcon name={theme === "dark" ? "sun" : "moon"} />
-              <span>{theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}</span>
-            </button>
-            <button role="menuitem" type="button" onClick={() => { window.location.href = "/privacy.html"; }}>
-              <UiIcon name="external" />
-              <span>Privacidade</span>
-            </button>
-            <button role="menuitem" type="button" onClick={() => { window.location.href = "/account-deletion.html"; }}>
-              <UiIcon name="delete" />
-              <span>Excluir minha conta</span>
-            </button>
+            <div className="theme-menu-control" role="group" aria-label="Tema">
+              <button className={theme === "light-new" ? "active" : ""} type="button" onClick={() => setTheme("light-new")} aria-label="Tema claro novo">
+                <MaterialIcon name="lightMode" className="theme-icon" />
+              </button>
+              <button className={theme === "light" ? "active" : ""} type="button" onClick={() => setTheme("light")} aria-label="Tema claro atual">
+                <MaterialIcon name="routine" className="theme-icon" />
+              </button>
+              <button className={theme === "dark" ? "active" : ""} type="button" onClick={() => setTheme("dark")} aria-label="Tema escuro">
+                <MaterialIcon name="darkMode" className="theme-icon" />
+              </button>
+            </div>
             <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); onSignOut(); }}>
               <UiIcon name="lock" />
               <span>Sair</span>
             </button>
-            {insideSelectedHousehold && canManageSelectedHousehold && (
-              <>
-                <div className="menu-divider" role="separator" />
-                <button role="menuitem" type="button" onClick={handleExport}>
-                  <MaterialIcon name="export" className="menu-icon" />
-                  <span>Exportar backup</span>
-                </button>
-                <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); fileInputRef.current?.click(); }}>
-                  <MaterialIcon name="import" className="menu-icon" />
-                  <span>Importar backup</span>
-                </button>
-              </>
-            )}
           </div>
         )}
       </header>
@@ -784,6 +780,9 @@ function FinanceApp({ session, demoMode = false, onSignOut }: { session: Session
             Dashboard
           </button>
           <button className="nav-action" type="button" onClick={handleNewEntry} aria-label="Novo lançamento">
+            <span>
+              <MaterialIcon name="add" className="nav-action-icon" />
+            </span>
             Novo
           </button>
           <button
@@ -993,17 +992,18 @@ function AuthGate({ checking = false, configured, onDemo }: { checking?: boolean
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [status, setStatus] = useState(checking ? "Verificando sessao..." : "");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [status, setStatus] = useState(checking ? "Verificando sessão..." : "");
   const [dialog, setDialog] = useState<{ tone: DialogTone; title: string; message: string; onClose?: () => void } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (checking) {
-      setStatus("Verificando sessao...");
+      setStatus("Verificando sessão...");
       return;
     }
 
-    setStatus((current) => (current === "Verificando sessao..." ? "" : current));
+    setStatus((current) => (current === "Verificando sessão..." ? "" : current));
   }, [checking]);
 
   function closeDialog() {
@@ -1112,14 +1112,24 @@ function AuthGate({ checking = false, configured, onDemo }: { checking?: boolean
             {mode !== "reset" && (
               <label>
                 Senha
-                <input
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  type="password"
-                  autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
-                  minLength={6}
-                  required
-                />
+                <span className="password-field">
+                  <input
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    type={passwordVisible ? "text" : "password"}
+                    autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
+                    minLength={6}
+                    required
+                  />
+                  <button
+                    className="password-visibility-button"
+                    type="button"
+                    aria-label={passwordVisible ? "Ocultar senha" : "Mostrar senha"}
+                    onClick={() => setPasswordVisible((visible) => !visible)}
+                  >
+                    <UiIcon name={passwordVisible ? "eyeOff" : "eye"} />
+                  </button>
+                </span>
               </label>
             )}
             <button className="filled-button" type="submit" disabled={submitting}>
@@ -1132,7 +1142,8 @@ function AuthGate({ checking = false, configured, onDemo }: { checking?: boolean
               {mode === "reset" ? "Voltar para login" : "Esqueci minha senha"}
             </button>
             <div className="access-links">
-              <a href="/privacy.html">Politica de privacidade</a>
+              <a href="/privacy.html">Política de privacidade</a>
+              <span aria-hidden="true">|</span>
               <a href="/account-deletion.html">Excluir conta</a>
             </div>
             {status && <p role="status">{status}</p>}
@@ -1146,6 +1157,7 @@ function AuthGate({ checking = false, configured, onDemo }: { checking?: boolean
 
 function PasswordSetupGate({ onDone }: { onDone: () => void }) {
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [status, setStatus] = useState("");
   const [dialog, setDialog] = useState<{ tone: DialogTone; title: string; message: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1181,7 +1193,24 @@ function PasswordSetupGate({ onDone }: { onDone: () => void }) {
         <h1>Definir senha</h1>
         <label>
           Nova senha
-          <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="new-password" minLength={6} required />
+          <span className="password-field">
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type={passwordVisible ? "text" : "password"}
+              autoComplete="new-password"
+              minLength={6}
+              required
+            />
+            <button
+              className="password-visibility-button"
+              type="button"
+              aria-label={passwordVisible ? "Ocultar senha" : "Mostrar senha"}
+              onClick={() => setPasswordVisible((visible) => !visible)}
+            >
+              <UiIcon name={passwordVisible ? "eyeOff" : "eye"} />
+            </button>
+          </span>
         </label>
         <button className="filled-button" type="submit" disabled={submitting}>
           {submitting ? "Salvando..." : "Salvar senha"}
@@ -1274,7 +1303,7 @@ function readInitialTheme(): ThemeMode {
   if (typeof window === "undefined") return "light";
 
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return stored === "dark" || stored === "light" ? stored : "light";
+  return stored === "dark" || stored === "light" || stored === "light-new" ? stored : "light";
 }
 
 function SyncIndicator({

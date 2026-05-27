@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Politica de privacidade - Fluxo Casa</title>
+    <title>Política de privacidade - Fluxo Casa</title>
     <style>
       :root {
         color-scheme: light;
@@ -36,6 +36,34 @@
         font-size: clamp(1.8rem, 5vw, 2.5rem);
       }
 
+      .page-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .back-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        border: 1px solid #6750a4;
+        border-radius: 999px;
+        padding: 0 16px;
+        color: #6750a4;
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .back-button:hover,
+      .back-button:focus-visible {
+        background: #f4efff;
+        outline: 0;
+      }
+
       h2 {
         margin-top: 28px;
         font-size: 1.25rem;
@@ -66,48 +94,51 @@
   </head>
   <body>
     <main>
-      <h1>Politica de privacidade</h1>
+      <div class="page-header">
+        <h1>Política de privacidade</h1>
+        <a class="back-button" href="/">Voltar</a>
+      </div>
       <p class="updated">Fluxo Casa - atualizado em 20 de maio de 2026</p>
 
       <p>
-        O Fluxo Casa e um aplicativo financeiro domestico publicado por Malgany. Esta politica explica quais dados sao tratados,
-        como eles sao usados e como voce pode solicitar exclusao.
+        O Fluxo Casa é um aplicativo financeiro doméstico publicado por Malgany. Esta política explica quais dados são tratados,
+        como eles são usados e como você pode solicitar exclusão.
       </p>
 
       <h2>Dados que tratamos</h2>
       <ul>
-        <li>Dados de conta, como e-mail de cadastro e identificadores de autenticacao.</li>
-        <li>Dados financeiros inseridos por voce, como lancamentos de entrada e saida, recorrencias, saldos, nomes de contas domesticas e convites de membros.</li>
-        <li>Dados tecnicos basicos necessarios para manter login, sincronizacao, seguranca e funcionamento offline.</li>
+        <li>Dados de conta, como e-mail de cadastro e identificadores de autenticação.</li>
+        <li>Dados financeiros inseridos por você, como lançamentos de entrada e saída, recorrências, saldos, nomes de contas domésticas e convites de membros.</li>
+        <li>Dados técnicos básicos necessários para manter login, sincronização, segurança e funcionamento offline.</li>
       </ul>
 
       <h2>Como usamos os dados</h2>
       <p>
-        Usamos os dados para autenticar usuarios, sincronizar informacoes entre dispositivos, permitir colaboracao entre membros convidados,
-        manter o app funcionando offline e preservar a seguranca da conta. Nao vendemos dados pessoais e nao exibimos anuncios.
+        Usamos os dados para autenticar usuários, sincronizar informações entre dispositivos, permitir colaboração entre membros convidados,
+        manter o app funcionando offline e preservar a segurança da conta. Não vendemos dados pessoais e não exibimos anúncios.
       </p>
 
-      <h2>Servicos de terceiros</h2>
+      <h2>Serviços de terceiros</h2>
       <p>
-        O app usa Supabase para autenticacao, banco de dados e sincronizacao, e Vercel para hospedagem da aplicacao web. Esses servicos
+        O app usa Supabase para autenticação, banco de dados e sincronização, e Vercel para hospedagem da aplicação web. Esses serviços
         processam dados somente para operar o Fluxo Casa.
       </p>
 
-      <h2>Armazenamento e retencao</h2>
+      <h2>Armazenamento e retenção</h2>
       <p>
-        Os dados podem ficar armazenados localmente no navegador/dispositivo e no banco remoto usado para sincronizacao. Mantemos os dados
-        enquanto a conta estiver ativa ou pelo tempo necessario para seguranca, prevencao de abuso, cumprimento legal ou resolucao de suporte.
+        Os dados podem ficar armazenados localmente no navegador/dispositivo e no banco remoto usado para sincronização. Mantemos os dados
+        enquanto a conta estiver ativa ou pelo tempo necessário para segurança, prevenção de abuso, cumprimento legal ou resolução de suporte.
       </p>
 
-      <h2>Exclusao de conta e dados</h2>
+      <h2>Exclusão de conta e dados</h2>
       <p>
-        Voce pode solicitar a exclusao da sua conta do app e dos dados associados em
-        <a href="/account-deletion.html">Excluir conta do Fluxo Casa</a>. Para proteger sua conta, a solicitacao deve ser feita pelo e-mail cadastrado.
+        Você pode solicitar a exclusão da sua conta do app e dos dados associados em
+        <a href="/account-deletion.html">Excluir conta do Fluxo Casa</a>. Para proteger sua conta, a solicitação deve ser feita pelo e-mail cadastrado.
       </p>
 
       <h2>Contato</h2>
       <p>
-        Para duvidas sobre privacidade ou suporte, entre em contato pelo e-mail
+        Para dúvidas sobre privacidade ou suporte, entre em contato pelo e-mail
         <a href="mailto:malganyplay@gmail.com">malganyplay@gmail.com</a>.
       </p>
     </main>

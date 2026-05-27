@@ -36,6 +36,34 @@
         font-size: clamp(1.8rem, 5vw, 2.5rem);
       }
 
+      .page-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .back-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        border: 1px solid #6750a4;
+        border-radius: 999px;
+        padding: 0 16px;
+        color: #6750a4;
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .back-button:hover,
+      .back-button:focus-visible {
+        background: #f4efff;
+        outline: 0;
+      }
+
       h2 {
         margin-top: 28px;
         font-size: 1.25rem;
@@ -67,40 +95,43 @@
   </head>
   <body>
     <main>
-      <h1>Excluir conta do Fluxo Casa</h1>
+      <div class="page-header">
+        <h1>Excluir conta do Fluxo Casa</h1>
+        <a class="back-button" href="/">Voltar</a>
+      </div>
       <p class="notice">
-        Esta pagina permite solicitar a exclusao da sua conta do app Fluxo Casa e dos dados associados.
+        Esta página permite solicitar a exclusão da sua conta do app Fluxo Casa e dos dados associados.
       </p>
 
       <h2>Como solicitar</h2>
       <ol>
         <li>Envie um e-mail para <a href="mailto:malganyplay@gmail.com">malganyplay@gmail.com</a>.</li>
         <li>Use o assunto: <strong>Excluir conta Fluxo Casa</strong>.</li>
-        <li>Envie a solicitacao usando o mesmo e-mail cadastrado no app.</li>
+        <li>Envie a solicitação usando o mesmo e-mail cadastrado no app.</li>
       </ol>
 
-      <h2>Dados excluidos</h2>
+      <h2>Dados excluídos</h2>
       <p>
-        Apos confirmar a titularidade da conta, removeremos a conta de autenticacao do Fluxo Casa e os dados associados ao usuario,
-        incluindo lancamentos financeiros, recorrencias, configuracoes, convites e informacoes de contas domesticas vinculadas ao usuario,
-        quando nao houver obrigacao legal ou necessidade legitima de retencao.
+        Após confirmar a titularidade da conta, removeremos a conta de autenticação do Fluxo Casa e os dados associados ao usuário,
+        incluindo lançamentos financeiros, recorrências, configurações, convites e informações de contas domésticas vinculadas ao usuário,
+        quando não houver obrigação legal ou necessidade legítima de retenção.
       </p>
 
       <h2>Prazo</h2>
       <p>
-        As solicitacoes sao analisadas e processadas em ate 30 dias. Podemos responder ao e-mail cadastrado para confirmar identidade
-        ou pedir informacoes adicionais antes de concluir a exclusao.
+        As solicitações são analisadas e processadas em até 30 dias. Podemos responder ao e-mail cadastrado para confirmar identidade
+        ou pedir informações adicionais antes de concluir a exclusão.
       </p>
 
       <h2>Dados que podem ser mantidos</h2>
       <p>
-        Alguns registros podem ser mantidos pelo tempo necessario para seguranca, prevencao de abuso, cumprimento legal ou resolucao de suporte.
-        Quando isso ocorrer, os dados serao limitados ao necessario.
+        Alguns registros podem ser mantidos pelo tempo necessário para segurança, prevenção de abuso, cumprimento legal ou resolução de suporte.
+        Quando isso ocorrer, os dados serão limitados ao necessário.
       </p>
 
       <h2>Privacidade</h2>
       <p>
-        Leia tambem a <a href="/privacy.html">Politica de privacidade do Fluxo Casa</a>.
+        Leia também a <a href="/privacy.html">Política de privacidade do Fluxo Casa</a>.
       </p>
     </main>
   </body>

@@ -137,6 +137,153 @@
   --elevation-5: 0 4px 4px color-mix(in srgb, var(--shadow-color) 52%, transparent), 0 8px 12px 6px color-mix(in srgb, var(--shadow-color) 32%, transparent);
 }
 
+:root[data-theme-variant="light-new"] {
+  --primary: #6750a4;
+  --on-primary-container: #6750a4;
+  --green: #4dc680;
+  --blue: #307ce5;
+  --red: #e14549;
+  --amber: #fa9525;
+  --surface: #fefdfe;
+  --surface-bright: #fefdfe;
+  --surface-container-low: #fefdfe;
+  --surface-container: #fefdfe;
+  --surface-container-high: #ffffff;
+  --surface-container-highest: #ffffff;
+  --timeline-section: #ffffff;
+  --timeline-row: #ffffff;
+  --bottom-nav-bg: #ffffff;
+  --bottom-nav-border: #e4e1e6;
+  --muted-text: var(--on-surface);
+  --filled-card-bg: #ffffff;
+  --filled-card-shadow: 0 10px 24px color-mix(in srgb, #21005d 8%, transparent), 0 2px 8px color-mix(in srgb, #21005d 5%, transparent);
+}
+
+:root[data-theme-variant="light-new"] .projection-chart-area {
+  fill: var(--primary-container);
+}
+
+:root[data-theme-variant="light-new"] .top-title span,
+:root[data-theme-variant="light-new"] .hero-balance span,
+:root[data-theme-variant="light-new"] .hero-balance small,
+:root[data-theme-variant="light-new"] .metric-card span,
+:root[data-theme-variant="light-new"] .projection-chart-header span,
+:root[data-theme-variant="light-new"] .projection-chart-header small,
+:root[data-theme-variant="light-new"] .projection-chart-footer,
+:root[data-theme-variant="light-new"] .month-strip button,
+:root[data-theme-variant="light-new"] .summary-line,
+:root[data-theme-variant="light-new"] .summary-line b,
+:root[data-theme-variant="light-new"] .consolidated-toggle,
+:root[data-theme-variant="light-new"] .timeline-list-header h2,
+:root[data-theme-variant="light-new"] .timeline-text strong,
+:root[data-theme-variant="light-new"] .timeline-text span,
+:root[data-theme-variant="light-new"] .month-totals span,
+:root[data-theme-variant="light-new"] .entry-icon,
+:root[data-theme-variant="light-new"] .bottom-nav button,
+:root[data-theme-variant="light-new"] .bottom-nav button.nav-action {
+  color: var(--muted-text);
+}
+
+:root[data-theme-variant="light-new"] .bottom-nav button.active,
+:root[data-theme-variant="light-new"] .bottom-nav button.active > span {
+  color: var(--primary);
+}
+
+:root[data-theme-variant="light-new"] .bottom-nav button.nav-action > span,
+:root[data-theme-variant="light-new"] .bottom-nav button.nav-action .nav-action-icon {
+  color: var(--primary);
+}
+
+:root[data-theme-variant="light-new"] .top-account-label {
+  color: var(--on-primary-container);
+}
+
+:root[data-theme-variant="light-new"] .top-app-bar h1 {
+  font-weight: 600;
+}
+
+:root[data-theme-variant="light-new"] .access-panel h1,
+:root[data-theme-variant="light-new"] .timeline-list-header h2 {
+  font-weight: 500;
+}
+
+:root[data-theme-variant="light-new"] .month-strip strong {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+:root[data-theme-variant="light-new"] .month-totals b {
+  color: var(--on-primary-container);
+}
+
+:root[data-theme-variant="light-new"] .access-panel h1,
+:root[data-theme-variant="light-new"] .access-panel label,
+:root[data-theme-variant="light-new"] .auth-tabs button:not(.active) {
+  color: var(--muted-text);
+}
+
+:root[data-theme-variant="light-new"] .timeline-list-section {
+  padding: 0 16px 4px;
+  background: var(--surface);
+}
+
+:root[data-theme-variant="light-new"] .timeline-scroll {
+  margin-top: 20px;
+}
+
+:root[data-theme-variant="light-new"] .timeline-content {
+  padding-bottom: 0;
+}
+
+:root[data-theme-variant="light-new"] .month-totals {
+  margin-bottom: 25px;
+}
+
+:root[data-theme-variant="light-new"] .timeline-list {
+  gap: 10px;
+  padding: 0 0 8px;
+  overflow: visible;
+}
+
+:root[data-theme-variant="light-new"] .timeline-list-section {
+  overflow: visible;
+}
+
+:root[data-theme-variant="light-new"] .timeline-scroll {
+  overflow: visible;
+}
+
+:root[data-theme-variant="light-new"] .swipe-row {
+  border-radius: var(--card-radius);
+  background: var(--filled-card-bg);
+  box-shadow: var(--filled-card-shadow);
+}
+
+:root[data-theme-variant="light-new"] .timeline-row {
+  background: var(--filled-card-bg);
+  box-shadow: none;
+}
+
+:root[data-theme-variant="light-new"] .segmented button.active.out {
+  background: var(--red);
+  color: var(--on-error);
+}
+
+:root[data-theme-variant="light-new"] .segmented button.active.in {
+  background: var(--green);
+  color: var(--on-error);
+}
+
+:root[data-theme-variant="light-new"] .mode-segmented button,
+:root[data-theme-variant="light-new"] .mode-segmented button.active,
+:root[data-theme-variant="light-new"] .sheet-form label,
+:root[data-theme-variant="light-new"] .sheet-form input,
+:root[data-theme-variant="light-new"] .sheet-form select,
+:root[data-theme-variant="light-new"] .currency-prefix,
+:root[data-theme-variant="light-new"] .currency-input input {
+  color: var(--muted-text);
+}
+
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
@@ -250,7 +397,7 @@ textarea {
   justify-content: center;
   color: var(--primary);
   font-size: 0.86rem;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .access-links a {
@@ -264,8 +411,11 @@ textarea {
   outline: 0;
 }
 
-.demo-access-button {
+.access-panel .demo-access-button {
   width: 100%;
+  border: 1px solid color-mix(in srgb, var(--primary) 56%, transparent);
+  background: var(--surface-container-lowest);
+  color: var(--primary);
 }
 
 .auth-tabs {
@@ -289,6 +439,59 @@ textarea {
 .auth-tabs button.active {
   background: var(--primary-container);
   color: var(--on-primary-container);
+}
+
+.access-panel label,
+.access-panel button,
+.access-panel .access-links,
+.access-panel p {
+  font-weight: 400;
+}
+
+.access-panel label,
+.access-panel .auth-tabs button,
+.access-panel .filled-button,
+.access-panel .demo-access-button {
+  font-weight: 500;
+}
+
+.access-panel .access-links {
+  font-weight: 500;
+}
+
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.password-field input {
+  padding-right: 48px;
+}
+
+.password-visibility-button {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  place-items: center;
+  border-radius: var(--shape-full);
+  background: transparent;
+  color: var(--on-surface-variant);
+  transform: translateY(-50%);
+}
+
+.password-visibility-button:hover,
+.password-visibility-button:focus-visible {
+  background: var(--state-primary-hover);
+  outline: 0;
+}
+
+.password-visibility-button .ui-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .dialog-backdrop {
@@ -683,6 +886,52 @@ textarea {
   background: var(--state-focus);
 }
 
+.theme-menu-control {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin: 6px 12px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--shape-full);
+  padding: 4px;
+  background: var(--surface-container-lowest);
+}
+
+.overflow-menu .theme-menu-control button {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 36px;
+  place-items: center;
+  border-radius: var(--shape-full);
+  padding: 0;
+  color: var(--on-surface-variant);
+}
+
+.overflow-menu .theme-menu-control button.active {
+  background: var(--primary-container);
+  color: var(--primary);
+}
+
+.overflow-menu .theme-menu-control button:hover,
+.overflow-menu .theme-menu-control button:focus-visible {
+  background: var(--state-primary-hover);
+}
+
+.overflow-menu .theme-menu-control button.active:hover,
+.overflow-menu .theme-menu-control button.active:focus-visible {
+  background: var(--primary-container);
+}
+
+.theme-icon {
+  display: block;
+  width: 22px;
+  height: 22px;
+  background: currentColor;
+  color: inherit;
+  mask: var(--material-icon-src) center / 22px 22px no-repeat;
+  -webkit-mask: var(--material-icon-src) center / 22px 22px no-repeat;
+}
+
 .menu-divider {
   height: 1px;
   margin: 8px 0;
@@ -836,7 +1085,7 @@ textarea {
 }
 
 .projection-chart-header strong {
-  color: var(--on-surface);
+  color: var(--on-primary-container);
   font-size: 1.32rem;
   line-height: 1.05;
 }
@@ -1372,12 +1621,12 @@ textarea {
   left: 0;
   z-index: 10;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 86px minmax(0, 1fr);
   column-gap: 12px;
   width: min(100%, 520px);
   min-height: 68px;
   margin: 0 auto;
-  border-top: 0;
+  border-top: 1px solid var(--bottom-nav-border, transparent);
   border-radius: 0;
   padding: 6px 24px calc(6px + env(safe-area-inset-bottom));
   background: var(--bottom-nav-bg);
@@ -1423,45 +1672,60 @@ textarea {
 }
 
 .bottom-nav button.active {
-  color: var(--bottom-nav-fg);
+  color: var(--primary);
 }
 
 .bottom-nav button.active > span {
-  background: var(--secondary-container);
-  color: var(--bottom-nav-fg);
+  background: var(--primary-container);
+  color: var(--primary);
 }
 
 .bottom-nav button.nav-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   justify-self: center;
   align-self: center;
-  gap: 0;
-  width: 62px;
+  gap: 1px;
+  width: 86px;
   min-height: 52px;
   border-radius: var(--shape-large);
-  padding: 0 10px;
-  background: var(--primary);
-  color: var(--on-primary);
-  font-weight: 700;
+  padding: 5px 12px 7px;
+  background: var(--primary-container);
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .bottom-nav button.nav-action > span {
-  display: none;
+  display: grid;
+  width: auto;
+  height: 20px;
+  place-items: center;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.nav-action-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  mask: var(--material-icon-src) center / 20px 20px no-repeat;
+  -webkit-mask: var(--material-icon-src) center / 20px 20px no-repeat;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .bottom-nav button.nav-action:hover {
-    background: color-mix(in srgb, var(--primary) 88%, var(--on-primary));
-    color: var(--on-primary);
+    background: color-mix(in srgb, var(--primary-container) 82%, var(--primary));
+    color: var(--primary);
     box-shadow: var(--elevation-1);
   }
 }
 
 .bottom-nav button.nav-action:focus-visible {
-  background: color-mix(in srgb, var(--primary) 88%, var(--on-primary));
-  color: var(--on-primary);
+  background: color-mix(in srgb, var(--primary-container) 82%, var(--primary));
+  color: var(--primary);
   box-shadow: var(--elevation-1);
   outline: var(--focus-ring);
   outline-offset: 2px;
@@ -1564,11 +1828,6 @@ select:disabled {
   border-color: var(--outline-variant);
   background: var(--surface-container);
   color: var(--on-surface-variant);
-}
-
-input:invalid,
-select:invalid {
-  border-color: var(--red);
 }
 
 select {

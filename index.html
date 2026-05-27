@@ -31,6 +31,21 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>Fluxo Casa</title>
+    <script>
+      (() => {
+        try {
+          const theme = localStorage.getItem("fluxo-casa-theme");
+          const appliedTheme = theme === "dark" ? "dark" : "light";
+          document.documentElement.dataset.theme = appliedTheme;
+          document.documentElement.dataset.themeVariant = theme || "light";
+          document.documentElement.style.colorScheme = appliedTheme;
+        } catch {
+          document.documentElement.dataset.theme = "light";
+          document.documentElement.dataset.themeVariant = "light";
+          document.documentElement.style.colorScheme = "light";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
