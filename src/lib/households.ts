@@ -313,7 +313,7 @@ function friendlyHouseholdError(error: unknown, fallback: string): string {
   if (normalized.includes("failed to fetch") || normalized.includes("network")) {
     return "Não foi possível conectar agora. Verifique sua internet e tente novamente.";
   }
-  if (normalized.includes("permission denied") || normalized.includes("row-level security") || normalized.includes("violates")) {
+  if (normalized.includes("permission denied") || normalized.includes("row-level security") || normalized.includes("violates row-level security")) {
     return "Você não tem permissão para fazer essa ação nesta conta.";
   }
   if (normalized.includes("schema cache") || normalized.includes("could not find") || normalized.includes("function") || normalized.includes("relation")) {

@@ -62,6 +62,7 @@ const APP_UPDATE_CHECK_PARAM = "app-update-check";
 const APP_UPDATE_RELOAD_DELAY_MS = 700;
 const DEMO_LOADING_DELAY_MS = 3000;
 const ANDROID_DOWNLOAD_URL = "https://play.google.com/store/apps/details?id=br.com.fluxocasa";
+const PERMISSION_SIGN_OUT_MESSAGE = "Sua sessão perdeu permissão para esta conta. Entre novamente.";
 const THEME_STORAGE_KEY = "fluxo-casa-theme";
 const DEMO_USER_ID = "demo-user";
 const DEMO_EMAIL = "demo@fluxocasa.local";
@@ -110,6 +111,7 @@ function App() {
   const [passwordSetup, setPasswordSetup] = useState(() => isPasswordSetupUrl());
   const [demoMode, setDemoMode] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() => readInitialTheme());
+  const [authNotice, setAuthNotice] = useState("");
   const supabaseConfigured = isSupabaseConfigured();
   const productionDesktopGate = productionDesktopGateMode();
 
@@ -140,6 +142,7 @@ function App() {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (event === "PASSWORD_RECOVERY") setPasswordSetup(true);
+      if (nextSession) setAuthNotice("");
       setSession(nextSession);
       setCheckingSession(false);
     });
@@ -150,24 +153,26 @@ function App() {
     };
   }, [supabaseConfigured]);
 
-  async function handleSignOut() {
+  async function handleSignOut(notice = "") {
     if (demoMode) {
       setDemoMode(false);
+      setAuthNotice(notice);
       return;
     }
 
     await getSupabaseClient().auth.signOut();
     setSession(null);
+    setAuthNotice(notice);
   }
 
   if (productionDesktopGate === "confirmation") return <DesktopConfirmationPage />;
   if (productionDesktopGate === "landing") return <DesktopLandingPage />;
 
-  if (checkingSession) return <AuthGate checking configured={supabaseConfigured} onDemo={() => setDemoMode(true)} />;
-  if (!session && !demoMode) return <AuthGate configured={supabaseConfigured} onDemo={() => setDemoMode(true)} />;
+  if (checkingSession) return <AuthGate checking configured={supabaseConfigured} notice={authNotice} onDemo={() => setDemoMode(true)} />;
+  if (!session && !demoMode) return <AuthGate configured={supabaseConfigured} notice={authNotice} onDemo={() => { setAuthNotice(""); setDemoMode(true); }} />;
   if (passwordSetup && !demoMode) return <PasswordSetupGate onDone={() => setPasswordSetup(false)} />;
 
-  return <FinanceApp session={demoMode ? DEMO_SESSION : session ?? DEMO_SESSION} demoMode={demoMode} theme={theme} setTheme={setTheme} onSignOut={() => void handleSignOut()} />;
+  return <FinanceApp session={demoMode ? DEMO_SESSION : session ?? DEMO_SESSION} demoMode={demoMode} theme={theme} setTheme={setTheme} onSignOut={handleSignOut} />;
 }
 
 function FinanceApp({
@@ -181,7 +186,7 @@ function FinanceApp({
   demoMode?: boolean;
   theme: ThemeMode;
   setTheme: (theme: ThemeMode) => void;
-  onSignOut: () => void;
+  onSignOut: (notice?: string) => Promise<void>;
 }) {
   const [view, setView] = useState<View>("home");
   const currentMonth = monthKey();
@@ -391,6 +396,7 @@ function FinanceApp({
       if (context.selectedHouseholdId) await ensureSettings(context.selectedHouseholdId);
       if (showMessage) setMessage("Contas atualizadas.");
     } catch (error) {
+      if (await handlePermissionError(error)) return;
       const cachedHouseholds = await loadCachedHouseholds();
       const fallbackHouseholdId = cachedHouseholds.find((household) => household.id === selectedHouseholdId)?.id ?? cachedHouseholds[0]?.id ?? "";
       setHouseholds(cachedHouseholds);
@@ -432,6 +438,7 @@ function FinanceApp({
       setHouseholdScreen({ mode: "edit", householdId: context.selectedHouseholdId });
       void runSync(false, context.selectedHouseholdId);
     } catch (error) {
+      if (await handlePermissionError(error)) return;
       setMessage(errorMessage(error, "Não foi possível criar a conta."));
     }
   }
@@ -451,6 +458,7 @@ function FinanceApp({
       setSelectedHouseholdId(context.selectedHouseholdId);
       setMessage("Conta salva.");
     } catch (error) {
+      if (await handlePermissionError(error)) return;
       setMessage(errorMessage(error, "Não foi possível salvar a conta."));
     }
   }
@@ -468,6 +476,7 @@ function FinanceApp({
       setMessage(inviteMessage(invite));
       return true;
     } catch (error) {
+      if (await handlePermissionError(error)) return false;
       setMessage(errorMessage(error, "Não foi possível enviar o convite."));
       return false;
     }
@@ -483,6 +492,7 @@ function FinanceApp({
       await removeHouseholdMember(householdId, memberId);
       setMessage("Membro removido.");
     } catch (error) {
+      if (await handlePermissionError(error)) return;
       setMessage(errorMessage(error, "Não foi possível remover o membro."));
     }
   }
@@ -510,8 +520,21 @@ function FinanceApp({
       setSheet(null);
       setMessage("Conta excluída.");
     } catch (error) {
+      if (await handlePermissionError(error)) return;
       setMessage(errorMessage(error, "Não foi possível excluir a conta."));
     }
+  }
+
+  async function handlePermissionError(error: unknown): Promise<boolean> {
+    if (!isPermissionSessionError(error)) return false;
+
+    setMessage("");
+    setSheet(null);
+    setDeletingHousehold(null);
+    setDeletingMovement(null);
+    setMenuOpen(false);
+    await onSignOut(PERMISSION_SIGN_OUT_MESSAGE);
+    return true;
   }
 
   function openHouseholdList() {
@@ -726,7 +749,7 @@ function FinanceApp({
                 <MaterialIcon name="darkMode" className="theme-icon" />
               </button>
             </div>
-            <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); onSignOut(); }}>
+            <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); void onSignOut(); }}>
               <UiIcon name="lock" />
               <span>Sair</span>
             </button>
@@ -999,12 +1022,12 @@ function demoEntry(id: string, kind: FlowKind, title: string, amount: number, da
   };
 }
 
-function AuthGate({ checking = false, configured, onDemo }: { checking?: boolean; configured: boolean; onDemo: () => void }) {
+function AuthGate({ checking = false, configured, notice = "", onDemo }: { checking?: boolean; configured: boolean; notice?: string; onDemo: () => void }) {
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const [status, setStatus] = useState(checking ? "Verificando sessão..." : "");
+  const [status, setStatus] = useState(checking ? "Verificando sessão..." : notice);
   const [dialog, setDialog] = useState<{ tone: DialogTone; title: string; message: string; onClose?: () => void } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -1014,8 +1037,8 @@ function AuthGate({ checking = false, configured, onDemo }: { checking?: boolean
       return;
     }
 
-    setStatus((current) => (current === "Verificando sessão..." ? "" : current));
-  }, [checking]);
+    setStatus((current) => notice || (current === "Verificando sessão..." ? "" : current));
+  }, [checking, notice]);
 
   function closeDialog() {
     const onClose = dialog?.onClose;
@@ -1308,6 +1331,22 @@ function errorMessage(error: unknown, fallback: string): string {
   }
   if (typeof error === "string" && error.trim()) return error;
   return fallback;
+}
+
+function isPermissionSessionError(error: unknown): boolean {
+  const message = normalizeErrorText(errorMessage(error, ""));
+  return (
+    message.includes("permission denied") ||
+    message.includes("row-level security") ||
+    message.includes("nao tem permissao")
+  );
+}
+
+function normalizeErrorText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function delay(milliseconds: number): Promise<void> {
