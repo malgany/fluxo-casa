@@ -60,6 +60,7 @@ type DemoHouseholdContext = {
 };
 const APP_UPDATE_CHECK_PARAM = "app-update-check";
 const APP_UPDATE_RELOAD_DELAY_MS = 700;
+const DEMO_LOADING_DELAY_MS = 3000;
 const THEME_STORAGE_KEY = "fluxo-casa-theme";
 const DEMO_USER_ID = "demo-user";
 const DEMO_EMAIL = "demo@fluxocasa.local";
@@ -197,6 +198,7 @@ function FinanceApp({
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const syncingRef = useRef(false);
+  const demoLoadingDelayShownRef = useRef(false);
 
   useEffect(() => {
     void refreshHouseholdContext();
@@ -367,6 +369,10 @@ function FinanceApp({
     setHouseholdLoading(true);
     try {
       if (demoMode) {
+        if (!demoLoadingDelayShownRef.current) {
+          await delay(DEMO_LOADING_DELAY_MS);
+          demoLoadingDelayShownRef.current = true;
+        }
         const context = await ensureDemoHousehold();
         setHouseholds(context.households);
         setSelectedHouseholdId(context.selectedHouseholdId);
@@ -735,7 +741,7 @@ function FinanceApp({
 
       <main className={activeHouseholdScreen ? "content household-content" : view === "timeline" ? "content timeline-content" : "content"}>
         {householdLoading ? (
-          <div className="empty-state">Carregando suas contas...</div>
+          <DashboardSkeleton />
         ) : activeHouseholdScreen ? (
           <HouseholdManagerPage
             currentUserEmail={session.user.email ?? ""}
@@ -1261,6 +1267,10 @@ function errorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
 function inviteMessage(invite: { emailSent: boolean; alreadyMember: boolean }): string {
   if (invite.alreadyMember) return "Essa pessoa já faz parte desta conta.";
   if (invite.emailSent) return "Convite enviado.";
@@ -1484,6 +1494,46 @@ function UiIcon({ name }: { name: UiIconName }) {
         <path key={path} d={path} />
       ))}
     </svg>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <section className="stack dashboard-skeleton" aria-label="Carregando suas contas" aria-busy="true">
+      <article className="hero-balance skeleton-card">
+        <span className="skeleton-line short" />
+        <strong className="skeleton-line amount-line" />
+        <small className="skeleton-line medium" />
+      </article>
+
+      <div className="card-grid">
+        {["in", "out", "info", "warning"].map((tone) => (
+          <article key={tone} className={`metric-card skeleton-card ${tone}`}>
+            <span className="skeleton-line medium" />
+            <strong className="skeleton-line value-line" />
+          </article>
+        ))}
+      </div>
+
+      <section className="projection-chart skeleton-card">
+        <div className="projection-chart-header">
+          <div>
+            <span className="skeleton-line medium" />
+            <strong className="skeleton-line value-line" />
+          </div>
+          <small className="skeleton-line tiny" />
+        </div>
+        <div className="skeleton-chart" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="projection-chart-footer">
+          <span className="skeleton-line tiny" />
+          <span className="skeleton-line tiny" />
+        </div>
+      </section>
+    </section>
   );
 }
 

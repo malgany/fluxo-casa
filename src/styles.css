@@ -241,16 +241,17 @@
 
 :root[data-theme-variant="light-new"] .timeline-list {
   gap: 10px;
-  padding: 0 0 8px;
-  overflow: visible;
+  margin-inline: -8px;
+  padding: 0 8px 8px;
+  overflow-y: auto;
 }
 
 :root[data-theme-variant="light-new"] .timeline-list-section {
-  overflow: visible;
+  overflow: hidden;
 }
 
 :root[data-theme-variant="light-new"] .timeline-scroll {
-  overflow: visible;
+  overflow: hidden;
 }
 
 :root[data-theme-variant="light-new"] .swipe-row {
@@ -954,6 +955,89 @@ textarea {
 .stack {
   display: grid;
   gap: 12px;
+}
+
+.dashboard-skeleton {
+  pointer-events: none;
+}
+
+.skeleton-card {
+  overflow: hidden;
+}
+
+.skeleton-line,
+.skeleton-chart {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: var(--shape-full);
+  background: color-mix(in srgb, var(--on-surface) 10%, transparent);
+}
+
+.skeleton-line::after,
+.skeleton-chart::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--surface-container-highest) 72%, transparent),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: skeleton-shimmer 1.35s ease-in-out infinite;
+}
+
+.skeleton-line.short {
+  width: 72px;
+  height: 14px;
+}
+
+.skeleton-line.medium {
+  width: min(68%, 160px);
+  height: 14px;
+}
+
+.skeleton-line.tiny {
+  width: 58px;
+  height: 12px;
+}
+
+.skeleton-line.amount-line {
+  width: min(82%, 250px);
+  height: clamp(2.15rem, 11vw, 3rem);
+}
+
+.skeleton-line.value-line {
+  width: min(78%, 128px);
+  height: 24px;
+}
+
+.dashboard-skeleton .projection-chart-header small,
+.dashboard-skeleton .projection-chart-footer span {
+  color: transparent;
+}
+
+.skeleton-chart {
+  display: grid;
+  height: 92px;
+  align-content: space-evenly;
+  border-radius: var(--shape-small);
+  padding: 12px 0;
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.skeleton-chart span {
+  display: block;
+  height: 1px;
+  background: color-mix(in srgb, var(--outline) 22%, transparent);
+}
+
+@keyframes skeleton-shimmer {
+  to {
+    transform: translateX(100%);
+  }
 }
 
 .hero-balance {
