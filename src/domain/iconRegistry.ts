@@ -50,13 +50,13 @@ export const serviceIcons = [
   },
   {
     id: "farmacia",
-    label: "Farmacia",
+    label: "Farmácia",
     src: "/service-icons/farmacia.svg",
     aliases: ["farmacia", "remedio", "medicamento", "saude", "drogaria"]
   },
   {
     id: "salario",
-    label: "Salario",
+    label: "Salário",
     src: "/service-icons/salario.svg",
     aliases: ["salario", "renda", "pagamento", "ordenado", "recebimento", "trabalho"]
   },
@@ -104,7 +104,7 @@ export const serviceIcons = [
   },
   {
     id: "manutencao",
-    label: "Manutencao",
+    label: "Manutenção",
     src: "/service-icons/manutencao.svg",
     aliases: ["manutencao", "conserto", "reparo", "ferramenta", "obra", "oficina"]
   },
@@ -191,6 +191,306 @@ export const serviceIcons = [
     label: "Entretenimento",
     src: "/service-icons/entretenimento.svg",
     aliases: ["entretenimento", "streaming", "filme", "serie", "show", "jogo"]
+  },
+  {
+    id: "contador",
+    label: "Contador",
+    src: "/service-icons/contador.svg",
+    aliases: ["contador", "contabilidade", "imposto", "mei", "declaracao"]
+  },
+  {
+    id: "internet",
+    label: "Internet",
+    src: "/service-icons/internet.svg",
+    aliases: ["internet", "wifi", "banda larga", "fibra", "rede"]
+  },
+  {
+    id: "telefone",
+    label: "Telefone",
+    src: "/service-icons/telefone.svg",
+    aliases: ["telefone", "celular", "chip", "pos pago", "plano"]
+  },
+  {
+    id: "gas",
+    label: "Gás",
+    src: "/service-icons/gas.svg",
+    aliases: ["gas", "botijao", "cozinha", "glp"]
+  },
+  {
+    id: "condominio",
+    label: "Condomínio",
+    src: "/service-icons/condominio.svg",
+    aliases: ["condominio", "predio", "apartamento", "moradia"]
+  },
+  {
+    id: "financiamento",
+    label: "Financiamento",
+    src: "/service-icons/financiamento.svg",
+    aliases: ["financiamento", "imovel", "veiculo", "parcela", "credito"]
+  },
+  {
+    id: "emprestimo",
+    label: "Empréstimo",
+    src: "/service-icons/emprestimo.svg",
+    aliases: ["emprestimo", "credito", "divida", "parcela", "banco"]
+  },
+  {
+    id: "cartao-credito",
+    label: "Cartão de crédito",
+    src: "/service-icons/cartao-credito.svg",
+    aliases: ["cartao", "cartao de credito", "fatura", "credito"]
+  },
+  {
+    id: "banco",
+    label: "Banco",
+    src: "/service-icons/banco.svg",
+    aliases: ["banco", "tarifa", "conta", "pix", "ted"]
+  },
+  {
+    id: "investimentos",
+    label: "Investimentos",
+    src: "/service-icons/investimentos.svg",
+    aliases: ["investimentos", "investimento", "corretora", "renda fixa", "acoes"]
+  },
+  {
+    id: "poupanca",
+    label: "Poupança",
+    src: "/service-icons/poupanca.svg",
+    aliases: ["poupanca", "reserva", "guardar dinheiro", "economia"]
+  },
+  {
+    id: "previdencia",
+    label: "Previdência",
+    src: "/service-icons/previdencia.svg",
+    aliases: ["previdencia", "aposentadoria", "futuro", "inss"]
+  },
+  {
+    id: "medico",
+    label: "Médico",
+    src: "/service-icons/medico.svg",
+    aliases: ["medico", "consulta", "clinica", "saude"]
+  },
+  {
+    id: "dentista",
+    label: "Dentista",
+    src: "/service-icons/dentista.svg",
+    aliases: ["dentista", "odontologia", "aparelho", "dente"]
+  },
+  {
+    id: "psicologo",
+    label: "Psicólogo",
+    src: "/service-icons/psicologo.svg",
+    aliases: ["psicologo", "terapia", "saude mental", "consulta"]
+  },
+  {
+    id: "exames",
+    label: "Exames",
+    src: "/service-icons/exames.svg",
+    aliases: ["exames", "laboratorio", "checkup", "saude"]
+  },
+  {
+    id: "plano-saude",
+    label: "Plano de saúde",
+    src: "/service-icons/plano-saude.svg",
+    aliases: ["plano de saude", "convenio", "saude", "mensalidade"]
+  },
+  {
+    id: "hospital",
+    label: "Hospital",
+    src: "/service-icons/hospital.svg",
+    aliases: ["hospital", "emergencia", "pronto socorro", "saude"]
+  },
+  {
+    id: "oculos",
+    label: "Óculos",
+    src: "/service-icons/oculos.svg",
+    aliases: ["oculos", "otica", "lente", "grau"]
+  },
+  {
+    id: "beleza",
+    label: "Beleza",
+    src: "/service-icons/beleza.svg",
+    aliases: ["beleza", "salao", "cabelo", "estetica"]
+  },
+  {
+    id: "barbearia",
+    label: "Barbearia",
+    src: "/service-icons/barbearia.svg",
+    aliases: ["barbearia", "barba", "corte", "cabelo"]
+  },
+  {
+    id: "higiene",
+    label: "Higiene",
+    src: "/service-icons/higiene.svg",
+    aliases: ["higiene", "shampoo", "sabonete", "cuidado pessoal"]
+  },
+  {
+    id: "roupas",
+    label: "Roupas",
+    src: "/service-icons/roupas.svg",
+    aliases: ["roupas", "vestuario", "moda", "camisa"]
+  },
+  {
+    id: "calcados",
+    label: "Calçados",
+    src: "/service-icons/calcados.svg",
+    aliases: ["calcados", "sapato", "tenis", "sandalia"]
+  },
+  {
+    id: "lavanderia",
+    label: "Lavanderia",
+    src: "/service-icons/lavanderia.svg",
+    aliases: ["lavanderia", "roupa", "lavagem", "seco"]
+  },
+  {
+    id: "padaria",
+    label: "Padaria",
+    src: "/service-icons/padaria.svg",
+    aliases: ["padaria", "pao", "cafe da manha", "lanche"]
+  },
+  {
+    id: "acougue",
+    label: "Açougue",
+    src: "/service-icons/acougue.svg",
+    aliases: ["acougue", "carne", "churrasco", "frango"]
+  },
+  {
+    id: "hortifruti",
+    label: "Hortifruti",
+    src: "/service-icons/hortifruti.svg",
+    aliases: ["hortifruti", "fruta", "verdura", "legume", "feira"]
+  },
+  {
+    id: "restaurante",
+    label: "Restaurante",
+    src: "/service-icons/restaurante.svg",
+    aliases: ["restaurante", "almoco", "jantar", "comida"]
+  },
+  {
+    id: "cafe",
+    label: "Café",
+    src: "/service-icons/cafe.svg",
+    aliases: ["cafe", "cafeteria", "cappuccino", "lanche"]
+  },
+  {
+    id: "transporte-publico",
+    label: "Transporte público",
+    src: "/service-icons/transporte-publico.svg",
+    aliases: ["transporte publico", "onibus", "metro", "bilhete"]
+  },
+  {
+    id: "estacionamento",
+    label: "Estacionamento",
+    src: "/service-icons/estacionamento.svg",
+    aliases: ["estacionamento", "vaga", "zona azul", "parking"]
+  },
+  {
+    id: "pedagio",
+    label: "Pedágio",
+    src: "/service-icons/pedagio.svg",
+    aliases: ["pedagio", "estrada", "rodovia", "viagem"]
+  },
+  {
+    id: "oficina",
+    label: "Oficina",
+    src: "/service-icons/oficina.svg",
+    aliases: ["oficina", "mecanico", "carro", "reparo"]
+  },
+  {
+    id: "ipva",
+    label: "IPVA",
+    src: "/service-icons/ipva.svg",
+    aliases: ["ipva", "documento", "veiculo", "imposto"]
+  },
+  {
+    id: "licenciamento",
+    label: "Licenciamento",
+    src: "/service-icons/licenciamento.svg",
+    aliases: ["licenciamento", "detran", "veiculo", "documento"]
+  },
+  {
+    id: "multa",
+    label: "Multa",
+    src: "/service-icons/multa.svg",
+    aliases: ["multa", "transito", "infracao", "detran"]
+  },
+  {
+    id: "taxi",
+    label: "Táxi",
+    src: "/service-icons/taxi.svg",
+    aliases: ["taxi", "corrida", "transporte", "motorista"]
+  },
+  {
+    id: "noventa-e-nove",
+    label: "99",
+    src: "/service-icons/noventa-e-nove.svg",
+    aliases: ["99", "noventa e nove", "corrida", "transporte", "motorista"]
+  },
+  {
+    id: "moveis",
+    label: "Móveis",
+    src: "/service-icons/moveis.svg",
+    aliases: ["moveis", "mobilia", "casa", "decoracao"]
+  },
+  {
+    id: "eletrodomesticos",
+    label: "Eletrodomésticos",
+    src: "/service-icons/eletrodomesticos.svg",
+    aliases: ["eletrodomesticos", "geladeira", "fogao", "maquina"]
+  },
+  {
+    id: "limpeza",
+    label: "Limpeza",
+    src: "/service-icons/limpeza.svg",
+    aliases: ["limpeza", "casa", "produtos", "faxina"]
+  },
+  {
+    id: "jardinagem",
+    label: "Jardinagem",
+    src: "/service-icons/jardinagem.svg",
+    aliases: ["jardinagem", "jardim", "planta", "grama"]
+  },
+  {
+    id: "diarista",
+    label: "Diarista",
+    src: "/service-icons/diarista.svg",
+    aliases: ["diarista", "faxina", "limpeza", "casa"]
+  },
+  {
+    id: "baba",
+    label: "Babá",
+    src: "/service-icons/baba.svg",
+    aliases: ["baba", "crianca", "filho", "cuidado"]
+  },
+  {
+    id: "criancas",
+    label: "Crianças",
+    src: "/service-icons/criancas.svg",
+    aliases: ["criancas", "filho", "brinquedo", "infantil"]
+  },
+  {
+    id: "livros",
+    label: "Livros",
+    src: "/service-icons/livros.svg",
+    aliases: ["livros", "livro", "leitura", "estudo"]
+  },
+  {
+    id: "doacoes",
+    label: "Doações",
+    src: "/service-icons/doacoes.svg",
+    aliases: ["doacoes", "doacao", "caridade", "igreja", "ajuda"]
+  },
+  {
+    id: "correios",
+    label: "Correios",
+    src: "/service-icons/correios.svg",
+    aliases: ["correios", "frete", "encomenda", "pacote"]
+  },
+  {
+    id: "cartorio",
+    label: "Cartório",
+    src: "/service-icons/cartorio.svg",
+    aliases: ["cartorio", "documento", "reconhecimento", "certidao"]
   }
 ] as const satisfies readonly ServiceIcon[];
 
