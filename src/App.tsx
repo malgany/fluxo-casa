@@ -1338,7 +1338,8 @@ function isPermissionSessionError(error: unknown): boolean {
   return (
     message.includes("permission denied") ||
     message.includes("row-level security") ||
-    message.includes("nao tem permissao")
+    message.includes("nao tem permissao") ||
+    message.includes("nao foi possivel criar sua conta inicial")
   );
 }
 
