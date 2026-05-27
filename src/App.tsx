@@ -1103,7 +1103,7 @@ function AuthGate({ checking = false, configured, notice = "", onDemo }: { check
     } catch (error) {
       setDialog({
         tone: "error",
-        title: "Não foi possível entrar",
+        title: authErrorTitle(mode),
         message: translateAuthError(error)
       });
     } finally {
@@ -1384,6 +1384,12 @@ function translateAuthError(error: unknown): string {
   }
 
   return "Não foi possível concluir esta ação. Tente novamente.";
+}
+
+function authErrorTitle(mode: AuthMode): string {
+  if (mode === "sign-up") return "Não foi possível criar a conta";
+  if (mode === "reset") return "Não foi possível recuperar a senha";
+  return "Não foi possível entrar";
 }
 
 function isPasswordSetupUrl(): boolean {
