@@ -1,4 +1,4 @@
-import type { SyncResult } from "./sync";
+import type { SyncNotification, SyncResult } from "./sync";
 
 export type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
 
@@ -28,6 +28,7 @@ interface SyncSchedulerOptions {
   getHouseholdId: () => string;
   isDemoMode?: () => boolean;
   onChange?: (snapshot: SyncSnapshot) => void;
+  onNotifications?: (notifications: SyncNotification[]) => void;
 }
 
 export const initialSyncSnapshot: SyncSnapshot = {
@@ -130,6 +131,7 @@ export class HouseholdSyncScheduler {
     try {
       const result = await this.options.sync(request.householdId);
       if (this.disposed) return;
+      if (result.ok && result.notifications?.length) this.options.onNotifications?.(result.notifications);
 
       this.updateSnapshot({
         state: result.ok ? "synced" : "error",

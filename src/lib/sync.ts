@@ -1,10 +1,23 @@
-import { applyRemoteChanges, getDirtyChanges, markChangesSynced } from "./db";
+import { applyRemoteChanges, db, getDirtyChanges, markChangesSynced } from "./db";
 import { getSupabaseClient } from "./supabase";
 import type { AppSettings, Entry, Recurrence, SyncChanges } from "../domain/types";
 
 export interface SyncResult {
   ok: boolean;
   message: string;
+  notifications?: SyncNotification[];
+}
+
+export interface SyncNotification {
+  id: string;
+  householdId: string;
+  action: "created" | "deleted";
+  collection: "entries" | "recurrences";
+  title: string;
+  amount: number;
+  flowKind: Entry["kind"];
+  date: string;
+  occurredAt: string;
 }
 
 interface SupabaseErrorLike {
@@ -63,7 +76,9 @@ export async function syncNow(householdId: string): Promise<SyncResult> {
     } = await supabase.auth.getSession();
     if (!session) return { ok: false, message: "Sessão expirada. Entre novamente." };
 
+    const lastSyncAt = getLastSyncAt(householdId);
     const pulled = await pullRemoteChanges(householdId);
+    const notifications = lastSyncAt ? await collectSyncNotifications(householdId, pulled, lastSyncAt) : [];
     await applyRemoteChanges(pulled);
 
     const dirty = await getDirtyChanges(householdId);
@@ -71,10 +86,97 @@ export async function syncNow(householdId: string): Promise<SyncResult> {
     await markChangesSynced(dirty);
 
     setLastSyncAt(householdId, new Date().toISOString());
-    return { ok: true, message: "Sincronizado." };
+    return { ok: true, message: "Sincronizado.", notifications };
   } catch (error) {
     return { ok: false, message: syncErrorMessage(error) };
   }
+}
+
+async function collectSyncNotifications(householdId: string, changes: SyncChanges, lastSyncAt: string): Promise<SyncNotification[]> {
+  const notifications: SyncNotification[] = [];
+
+  for (const remote of changes.entries ?? []) {
+    const current = await db.entries.get(remote.id);
+    const notification = buildEntryNotification(householdId, remote, current, lastSyncAt);
+    if (notification) notifications.push(notification);
+  }
+
+  for (const remote of changes.recurrences ?? []) {
+    const current = await db.recurrences.get(remote.id);
+    const notification = buildRecurrenceNotification(householdId, remote, current, lastSyncAt);
+    if (notification) notifications.push(notification);
+  }
+
+  return notifications.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+}
+
+function buildEntryNotification(householdId: string, remote: Entry, current: Entry | undefined, lastSyncAt: string): SyncNotification | undefined {
+  if (!current && !remote.deletedAt && remote.createdAt > lastSyncAt) {
+    return {
+      id: `entries:${remote.id}:created:${remote.createdAt}`,
+      householdId,
+      action: "created",
+      collection: "entries",
+      title: remote.title,
+      amount: remote.amount,
+      flowKind: remote.kind,
+      date: remote.date,
+      occurredAt: remote.createdAt
+    };
+  }
+
+  if (current && !current.deletedAt && remote.deletedAt && remote.deletedAt > lastSyncAt) {
+    return {
+      id: `entries:${remote.id}:deleted:${remote.deletedAt}`,
+      householdId,
+      action: "deleted",
+      collection: "entries",
+      title: remote.title,
+      amount: remote.amount,
+      flowKind: remote.kind,
+      date: remote.date,
+      occurredAt: remote.deletedAt
+    };
+  }
+
+  return undefined;
+}
+
+function buildRecurrenceNotification(
+  householdId: string,
+  remote: Recurrence,
+  current: Recurrence | undefined,
+  lastSyncAt: string
+): SyncNotification | undefined {
+  if (!current && !remote.deletedAt && remote.createdAt > lastSyncAt) {
+    return {
+      id: `recurrences:${remote.id}:created:${remote.createdAt}`,
+      householdId,
+      action: "created",
+      collection: "recurrences",
+      title: remote.title,
+      amount: remote.amount,
+      flowKind: remote.kind,
+      date: remote.startsOn,
+      occurredAt: remote.createdAt
+    };
+  }
+
+  if (current && !current.deletedAt && remote.deletedAt && remote.deletedAt > lastSyncAt) {
+    return {
+      id: `recurrences:${remote.id}:deleted:${remote.deletedAt}`,
+      householdId,
+      action: "deleted",
+      collection: "recurrences",
+      title: remote.title,
+      amount: remote.amount,
+      flowKind: remote.kind,
+      date: remote.startsOn,
+      occurredAt: remote.deletedAt
+    };
+  }
+
+  return undefined;
 }
 
 async function pullRemoteChanges(householdId: string): Promise<SyncChanges> {

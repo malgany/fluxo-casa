@@ -1,9 +1,9 @@
 import { type Session } from "@supabase/supabase-js";
 import { useLiveQuery } from "dexie-react-hooks";
-import { type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { db, createBase, ensureSettings, exportBackup, importBackup, saveRecord, softDelete } from "./lib/db";
 import { MUTATION_SYNC_DEBOUNCE_MS, useHouseholdSync } from "./lib/useHouseholdSync";
-import type { SyncIndicatorState } from "./lib/syncScheduler";
+import type { SyncNotification } from "./lib/sync";
 import {
   createHousehold,
   getHouseholdMembers,
@@ -21,22 +21,22 @@ import {
   dayLabel,
   firstDayOfMonth,
   formatMoney,
-  lastDayOfMonth,
   monthKey,
   monthLabel,
   monthName,
   previousDay,
-  signedAmount,
   todayIso,
   yearLabel
 } from "./domain/dates";
 import { active, calculateMonth, defaultSettings, settingsIdForHousehold, type MonthSnapshot, type TimelineItem } from "./domain/finance";
 import { findIconById, searchIconOptions, type ServiceIcon } from "./domain/iconRegistry";
 import { buildInstallmentPlan, buildInstallmentPreview, MAX_INSTALLMENT_COUNT, parseInstallmentCount } from "./domain/installments";
+import { buildProjectionChart } from "./domain/projectionChart";
 import type { AppSettings, Entry, FlowKind, Household, HouseholdInvitation, HouseholdMember, HouseholdRole, HouseholdSummary, Recurrence } from "./domain/types";
 
 type View = "home" | "timeline";
 type Sheet = "entry" | "balance" | null;
+type DashboardPeriod = "previous" | "current" | "next";
 type ThemeMode = "light-new" | "light" | "dark";
 type MaterialIconName = "wallet" | "update" | "export" | "import" | "add" | "lightMode" | "routine" | "darkMode";
 type UiIconName = "home" | "list" | "more" | "back" | "close" | "delete" | "edit" | "external" | "moon" | "sun" | "lock" | "users" | "info" | "warning" | "eye" | "eyeOff";
@@ -76,6 +76,16 @@ const DEMO_SESSION = {
 const SWIPE_ACTION_WIDTH = 108;
 const SWIPE_TRIGGER_DISTANCE = 72;
 const INSTALLMENT_COUNT_OPTIONS = Array.from({ length: MAX_INSTALLMENT_COUNT - 1 }, (_, index) => index + 2);
+const DASHBOARD_PERIOD_OFFSETS: Record<DashboardPeriod, number> = {
+  previous: -1,
+  current: 0,
+  next: 1
+};
+const DASHBOARD_PERIOD_LABELS: Record<DashboardPeriod, string> = {
+  previous: "Mês anterior",
+  current: "Este mês",
+  next: "Próximo mês"
+};
 const MATERIAL_ICON_SRC: Record<MaterialIconName, string> = {
   wallet: "/material-symbols/account_balance_wallet.svg",
   update: "/material-symbols/update.svg",
@@ -190,6 +200,7 @@ function FinanceApp({
 }) {
   const [view, setView] = useState<View>("home");
   const currentMonth = monthKey();
+  const [dashboardPeriod, setDashboardPeriod] = useState<DashboardPeriod>("current");
   const [timelineMonth, setTimelineMonth] = useState(currentMonth);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [editingMovement, setEditingMovement] = useState<MovementTarget | null>(null);
@@ -201,7 +212,7 @@ function FinanceApp({
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
   const [householdLoading, setHouseholdLoading] = useState(true);
   const [householdScreen, setHouseholdScreen] = useState<HouseholdScreen | null>(null);
-  const { state: syncState, hint: syncHint, hintVisible: syncHintVisible, requestSync } = useHouseholdSync({
+  const { activeNotification, dismissActiveNotification, notifications, readNextNotification, requestSync } = useHouseholdSync({
     householdId: selectedHouseholdId,
     demoMode
   });
@@ -283,7 +294,7 @@ function FinanceApp({
         ? "Nova conta"
         : "Contas"
     : view === "home"
-      ? "Dashboard"
+      ? "Olá! 👋"
       : "Lançamentos";
   const headerSubtitle = activeHouseholdScreen
     ? activeHouseholdScreen.mode === "edit"
@@ -291,9 +302,10 @@ function FinanceApp({
       : "Contas e membros"
     : view === "timeline"
       ? yearLabel(timelineMonth)
-      : monthLabel(currentMonth);
+      : "Resumo da casa";
 
-  const homeSnapshot = useMemo(() => calculateMonth(data, currentMonth), [data, currentMonth]);
+  const dashboardMonth = addMonths(currentMonth, DASHBOARD_PERIOD_OFFSETS[dashboardPeriod]);
+  const homeSnapshot = useMemo(() => calculateMonth(data, dashboardMonth), [dashboardMonth, data]);
   const editingSheetRecord = useMemo<EntrySheetRecord | undefined>(() => {
     if (!editingMovement) return undefined;
 
@@ -645,7 +657,14 @@ function FinanceApp({
           </div>
         )}
         <div className="app-actions">
-          {insideSelectedHousehold && <SyncIndicator state={syncState} hint={syncHint} visible={syncHintVisible} onPress={() => requestSync({ reason: "manual", showHint: true })} />}
+          {insideSelectedHousehold && (
+            <NotificationBell
+              count={notifications.length}
+              notification={activeNotification}
+              onDismiss={dismissActiveNotification}
+              onPress={readNextNotification}
+            />
+          )}
           <button
             ref={menuButtonRef}
             className="icon-button"
@@ -728,7 +747,7 @@ function FinanceApp({
             onSelect={(householdId) => void handleSelectHousehold(householdId)}
           />
         ) : view === "home" ? (
-          <HomeView snapshot={homeSnapshot} />
+          <HomeView snapshot={homeSnapshot} period={dashboardPeriod} onPeriodChange={setDashboardPeriod} />
         ) : (
           <TimelineView
             data={data}
@@ -1219,7 +1238,7 @@ function DesktopConfirmationPage() {
     <main className="desktop-gate confirmation">
       <section className="desktop-gate-panel">
         <div className="desktop-gate-mark success" aria-hidden="true">
-          <SyncIcon state="synced" />
+          <ConfirmationIcon />
         </div>
         <p>Fluxo Casa</p>
         <h1>Conta confirmada com sucesso.</h1>
@@ -1361,27 +1380,68 @@ function readInitialTheme(): ThemeMode {
   return stored === "dark" || stored === "light" || stored === "light-new" ? stored : "light";
 }
 
-function SyncIndicator({
-  state,
-  hint,
-  visible,
+function NotificationBell({
+  count,
+  notification,
+  onDismiss,
   onPress
 }: {
-  state: SyncIndicatorState;
-  hint: string;
-  visible: boolean;
+  count: number;
+  notification?: SyncNotification;
+  onDismiss: () => void;
   onPress: () => void;
 }) {
-  const label = state === "syncing" ? "Atualizando..." : hint;
+  const label = count > 0 ? `${count} ${count === 1 ? "nova atualização" : "novas atualizações"}` : "Sem novas atualizações";
 
   return (
-    <button className={`sync-indicator ${state}`} type="button" onClick={onPress} aria-label={label} title={label}>
-      <SyncIcon state={state} />
-      <span className={visible ? "sync-tooltip visible" : "sync-tooltip"} role="status">
-        {label}
-      </span>
-    </button>
+    <div className="notification-wrap">
+      <button className={count > 0 ? "notification-bell has-items" : "notification-bell"} type="button" onClick={onPress} aria-label={label} title={label}>
+        <BellIcon />
+        {count > 0 && <span className="notification-badge">{count > 9 ? "9+" : count}</span>}
+      </button>
+      {notification && (
+        <div className="notification-card" role="status">
+          <strong>{notificationTitle(notification)}</strong>
+          <span>{notificationDescription(notification)}</span>
+          <button type="button" onClick={onDismiss} aria-label="Fechar notificação">
+            OK
+          </button>
+        </div>
+      )}
+    </div>
   );
+}
+
+function BellIcon() {
+  return (
+    <svg className="notification-svg" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M18 9.8a6 6 0 1 0-12 0c0 7-2.2 7.6-2.2 7.6h16.4S18 16.8 18 9.8Z" />
+      <path d="M9.5 20a2.7 2.7 0 0 0 5 0" />
+    </svg>
+  );
+}
+
+function ConfirmationIcon() {
+  return (
+    <svg className="notification-svg" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8" />
+      <path d="m8.5 12.2 2.2 2.2 4.8-5" />
+    </svg>
+  );
+}
+
+function notificationTitle(notification: SyncNotification): string {
+  if (notification.collection === "recurrences") {
+    return notification.action === "created" ? "Recorrência adicionada" : "Recorrência removida";
+  }
+
+  return notification.action === "created" ? "Lançamento adicionado" : "Lançamento removido";
+}
+
+function notificationDescription(notification: SyncNotification): string {
+  const movement = notification.flowKind === "in" ? "entrada" : "saída";
+  const action = notification.action === "created" ? "lançado" : "removido";
+  return `${notification.title}: ${formatMoney(notification.amount)} de ${movement} ${action} para ${dayLabel(notification.date)}.`;
 }
 
 async function checkForAppUpdate(): Promise<boolean> {
@@ -1483,43 +1543,6 @@ async function updateServiceWorker(): Promise<boolean> {
   }
 }
 
-function SyncIcon({ state }: { state: SyncIndicatorState }) {
-  if (state === "syncing") {
-    return (
-      <svg className="sync-svg spinner" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="8" />
-        <path d="M20 12a8 8 0 0 0-8-8" />
-      </svg>
-    );
-  }
-
-  if (state === "error") {
-    return (
-      <svg className="sync-svg" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="8" />
-        <path d="M12 7v6" />
-        <path d="M12 16.5v.5" />
-      </svg>
-    );
-  }
-
-  if (state === "synced") {
-    return (
-      <svg className="sync-svg" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="8" />
-        <path d="m8.5 12.2 2.2 2.2 4.8-5" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg className="sync-svg" viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="8" />
-      <path d="M8 12h8" />
-    </svg>
-  );
-}
-
 function MaterialIcon({ name, className }: { name: MaterialIconName; className: string }) {
   return <span className={className} style={{ "--material-icon-src": `url("${MATERIAL_ICON_SRC[name]}")` } as CSSProperties} aria-hidden="true" />;
 }
@@ -1582,11 +1605,22 @@ function DashboardSkeleton() {
   );
 }
 
-function HomeView({ snapshot }: { snapshot: MonthSnapshot }) {
+function HomeView({
+  snapshot,
+  period,
+  onPeriodChange
+}: {
+  snapshot: MonthSnapshot;
+  period: DashboardPeriod;
+  onPeriodChange: (period: DashboardPeriod) => void;
+}) {
   return (
     <section className="stack">
       <article className="hero-balance" aria-label="Saldo do mês">
-        <span>Saldo</span>
+        <div className="hero-balance-header">
+          <span>Saldo do mês</span>
+          <DashboardPeriodSelect value={period} onChange={onPeriodChange} />
+        </div>
         <strong>{formatMoney(snapshot.currentBalance)}</strong>
         <small>Saldo final previsto: {formatMoney(snapshot.projectedBalance)}</small>
       </article>
@@ -1603,8 +1637,63 @@ function HomeView({ snapshot }: { snapshot: MonthSnapshot }) {
   );
 }
 
+function DashboardPeriodSelect({ value, onChange }: { value: DashboardPeriod; onChange: (period: DashboardPeriod) => void }) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const label = DASHBOARD_PERIOD_LABELS[value];
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function closeMenu(event: PointerEvent) {
+      const target = event.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+
+    function closeWithEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("pointerdown", closeMenu);
+    document.addEventListener("keydown", closeWithEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      document.removeEventListener("keydown", closeWithEscape);
+    };
+  }, [open]);
+
+  return (
+    <div ref={menuRef} className="period-select">
+      <button className="period-select-button" type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+        {label}
+      </button>
+      {open && (
+        <div className="period-menu" role="listbox" aria-label="Período do resumo">
+          {(Object.keys(DASHBOARD_PERIOD_LABELS) as DashboardPeriod[]).map((period) => (
+            <button
+              key={period}
+              className={period === value ? "active" : ""}
+              type="button"
+              role="option"
+              aria-selected={period === value}
+              onClick={() => {
+                onChange(period);
+                setOpen(false);
+              }}
+            >
+              {DASHBOARD_PERIOD_LABELS[period]}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProjectionChart({ snapshot }: { snapshot: MonthSnapshot }) {
   const chart = useMemo(() => buildProjectionChart(snapshot), [snapshot]);
+  const negativeClipId = useId().replace(/:/g, "");
 
   return (
     <section className="projection-chart" aria-label="Projeção do mês">
@@ -1617,79 +1706,41 @@ function ProjectionChart({ snapshot }: { snapshot: MonthSnapshot }) {
       </div>
 
       <svg className="projection-chart-svg" viewBox="0 0 320 112" role="img" aria-label={`Saldo previsto: ${formatMoney(snapshot.projectedBalance)}`}>
+        <defs>
+          <clipPath id={negativeClipId}>
+            <rect x="16" y={chart.zeroY + 2.2} width="288" height={112 - chart.zeroY - 2.2} />
+          </clipPath>
+        </defs>
         <path className="projection-chart-grid" d="M16 26H304M16 60H304M16 94H304" />
         <path className="projection-chart-area" d={chart.areaPath} />
-        <path className="projection-chart-line" d={chart.linePath} />
+        {chart.hasNegativeBalance && <path className="projection-chart-area negative" d={chart.areaPath} clipPath={`url(#${negativeClipId})`} />}
+        {chart.actualLinePath && <path className="projection-chart-line" d={chart.actualLinePath} />}
+        {chart.hasNegativeBalance && chart.actualLinePath && <path className="projection-chart-line negative" d={chart.actualLinePath} clipPath={`url(#${negativeClipId})`} />}
+        {chart.projectionLinePath && <path className="projection-chart-line projection" d={chart.projectionLinePath} />}
+        {chart.hasNegativeBalance && chart.projectionLinePath && (
+          <path className="projection-chart-line projection negative" d={chart.projectionLinePath} clipPath={`url(#${negativeClipId})`} />
+        )}
         {chart.todayPoint && (
           <g className="projection-chart-today" transform={`translate(${chart.todayPoint.x} ${chart.todayPoint.y})`}>
             <line y1={-64} y2={18} />
             <circle r="4.2" />
           </g>
         )}
+        <line className="projection-chart-zero" x1="16" x2="304" y1={chart.zeroY} y2={chart.zeroY} />
       </svg>
 
       <div className="projection-chart-footer">
-        <span>{formatMoney(chart.minValue)}</span>
-        <span>{formatMoney(chart.maxValue)}</span>
+        <span>
+          <small>Saldo inicial</small>
+          <b>{formatMoney(snapshot.openingBalance)}</b>
+        </span>
+        <span>
+          <small>Previsto</small>
+          <b>{formatMoney(snapshot.projectedBalance)}</b>
+        </span>
       </div>
     </section>
   );
-}
-
-function buildProjectionChart(snapshot: MonthSnapshot) {
-  const lastDay = Number(lastDayOfMonth(snapshot.month).slice(8, 10));
-  const today = todayIso();
-  const todayDay = monthKey(today) === snapshot.month ? Number(today.slice(8, 10)) : undefined;
-  const dailyChanges = new Map<number, number>();
-
-  for (const item of snapshot.items) {
-    const day = Number(item.date.slice(8, 10));
-    dailyChanges.set(day, (dailyChanges.get(day) ?? 0) + signedAmount(item.kind, item.amount));
-  }
-
-  let balance = snapshot.openingBalance;
-  const values = Array.from({ length: lastDay }, (_, index) => {
-    const day = index + 1;
-    balance += dailyChanges.get(day) ?? 0;
-    return {
-      day,
-      value: balance
-    };
-  });
-
-  const rawMin = Math.min(snapshot.openingBalance, ...values.map((point) => point.value));
-  const rawMax = Math.max(snapshot.openingBalance, ...values.map((point) => point.value));
-  const range = Math.max(rawMax - rawMin, Math.max(Math.abs(rawMax), 1) * 0.18);
-  const minValue = rawMin - range * 0.16;
-  const maxValue = rawMax + range * 0.16;
-  const chartWidth = 288;
-  const chartHeight = 68;
-  const left = 16;
-  const top = 26;
-  const bottom = top + chartHeight;
-  const valueRange = maxValue - minValue || 1;
-  const points = values.map((point) => {
-    const x = left + ((point.day - 1) / Math.max(lastDay - 1, 1)) * chartWidth;
-    const y = bottom - ((point.value - minValue) / valueRange) * chartHeight;
-    return { ...point, x, y };
-  });
-  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"}${round(point.x)} ${round(point.y)}`).join(" ");
-  const areaPath = `${linePath} L${round(left + chartWidth)} ${bottom} L${left} ${bottom} Z`;
-  const todayPoint = todayDay ? points[todayDay - 1] : undefined;
-
-  return {
-    areaPath,
-    hasMovements: snapshot.items.length > 0,
-    linePath,
-    maxValue: rawMax,
-    minValue: rawMin,
-    movementCount: snapshot.items.length,
-    todayPoint
-  };
-}
-
-function round(value: number): number {
-  return Math.round(value * 10) / 10;
 }
 
 function clamp(value: number, min: number, max: number): number {

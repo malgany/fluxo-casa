@@ -4,7 +4,12 @@ import { db, getDirtyChanges, saveRecord } from "./db";
 import { syncNow } from "./sync";
 import type { Entry } from "../domain/types";
 
-const { supabaseMock, upserts, upsertError } = vi.hoisted(() => ({
+const { remoteRowsByTable, supabaseMock, upserts, upsertError } = vi.hoisted(() => ({
+  remoteRowsByTable: {
+    entries: [] as unknown[],
+    recurrences: [] as unknown[],
+    household_settings: [] as unknown[]
+  } as Record<string, unknown[]>,
   upserts: [] as Array<{ table: string; rows: unknown[] }>,
   upsertError: { current: null as null | { message: string } },
   supabaseMock: {
@@ -52,6 +57,9 @@ describe("syncNow", () => {
     vi.stubGlobal("localStorage", createMemoryStorage());
     upserts.length = 0;
     upsertError.current = null;
+    remoteRowsByTable.entries = [remoteEntryRow];
+    remoteRowsByTable.recurrences = [];
+    remoteRowsByTable.household_settings = [];
     supabaseMock.auth.getSession.mockResolvedValue({ data: { session: { access_token: "token" } } });
     supabaseMock.from.mockImplementation((table: string) => createTableMock(table));
   });
@@ -62,7 +70,8 @@ describe("syncNow", () => {
 
     const result = await syncNow("household_1");
 
-    expect(result).toEqual({ ok: true, message: "Sincronizado." });
+    expect(result).toMatchObject({ ok: true, message: "Sincronizado." });
+    expect(result.notifications).toEqual([]);
     expect(await db.entries.get(remoteEntryRow.id)).toMatchObject({ title: "Mercado", householdId: "household_1", syncStatus: "synced" });
     expect(await db.entries.get(localEntry.id)).toMatchObject({ title: "Agua", syncStatus: "synced" });
     expect((await getDirtyChanges("household_1")).entries ?? []).toHaveLength(0);
@@ -81,6 +90,64 @@ describe("syncNow", () => {
     expect(result.message).not.toContain("row-level security");
     expect(result.message).not.toContain("entries");
   });
+
+  it("notifies remote entries created after the previous sync", async () => {
+    localStorage.setItem("fluxo-casa-supabase-sync-at:household_1", "2026-05-15T09:00:00.000Z");
+
+    const result = await syncNow("household_1");
+
+    expect(result.notifications).toEqual([
+      expect.objectContaining({
+        action: "created",
+        amount: 200,
+        collection: "entries",
+        date: "2026-05-15",
+        title: "Mercado"
+      })
+    ]);
+  });
+
+  it("does not notify remote entry edits", async () => {
+    localStorage.setItem("fluxo-casa-supabase-sync-at:household_1", "2026-05-15T09:00:00.000Z");
+    await db.entries.put({
+      ...localEntry,
+      id: remoteEntryRow.id,
+      title: "Mercado antigo",
+      syncStatus: "synced"
+    });
+
+    const result = await syncNow("household_1");
+
+    expect(result.notifications).toEqual([]);
+  });
+
+  it("notifies remote entries deleted after the previous sync", async () => {
+    localStorage.setItem("fluxo-casa-supabase-sync-at:household_1", "2026-05-15T09:00:00.000Z");
+    await db.entries.put({
+      ...localEntry,
+      id: remoteEntryRow.id,
+      title: "Mercado",
+      syncStatus: "synced"
+    });
+    remoteRowsByTable.entries = [
+      {
+        ...remoteEntryRow,
+        deleted_at: "2026-05-15T11:00:00.000Z",
+        updated_at: "2026-05-15T11:00:00.000Z"
+      }
+    ];
+
+    const result = await syncNow("household_1");
+
+    expect(result.notifications).toEqual([
+      expect.objectContaining({
+        action: "deleted",
+        amount: 200,
+        collection: "entries",
+        title: "Mercado"
+      })
+    ]);
+  });
 });
 
 function createTableMock(table: string) {
@@ -95,7 +162,7 @@ function createTableMock(table: string) {
 }
 
 function createSelectQuery(table: string) {
-  const data = table === "entries" ? [remoteEntryRow] : [];
+  const data = remoteRowsByTable[table] ?? [];
   const result = Promise.resolve({ data, error: null });
   return {
     eq: () => createSelectQuery(table),
