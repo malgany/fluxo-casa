@@ -32,7 +32,7 @@ def twaManifest = [
     navigationColorDark: '#000000', // The color used for the dark navbar.
     navigationDividerColor: '#000000', // The navbar divider color.
     navigationDividerColorDark: '#000000', // The dark navbar divider color.
-    displayMode: 'immersive', // The fullscreen display mode used by the TWA.
+    displayMode: 'default', // Shows the Android status bar while keeping the themed status bar color.
     backgroundColor: '#FEF7FF', // The color used for the splash screen background.
     enableNotifications: false, // Set to true to enable notification delegation.
     // Every shortcut must include the following fields:

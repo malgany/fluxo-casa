@@ -38,7 +38,7 @@ type Sheet = "entry" | "balance" | null;
 type DashboardPeriod = "previous" | "current" | "next";
 type ThemeMode = "light-new" | "light" | "dark";
 type MaterialIconName = "wallet" | "update" | "export" | "import" | "add" | "lightMode" | "routine" | "darkMode";
-type UiIconName = "home" | "list" | "more" | "back" | "close" | "delete" | "edit" | "external" | "moon" | "sun" | "lock" | "users" | "info" | "warning" | "eye" | "eyeOff";
+type UiIconName = "home" | "list" | "more" | "back" | "close" | "delete" | "edit" | "external" | "moon" | "sun" | "lock" | "users" | "info" | "warning" | "eye" | "eyeOff" | "user" | "chevronRight" | "briefcase" | "bank" | "crown" | "shield" | "plus";
 type AuthMode = "sign-in" | "sign-up" | "reset";
 type DialogTone = "info" | "error";
 type HouseholdScreen = { mode: "list" | "create" | "edit"; householdId?: string };
@@ -125,7 +125,14 @@ const UI_ICON_PATHS: Record<UiIconName, string[]> = {
   sun: ["M12 4V2", "M12 22v-2", "m4.93 4.93-1.42-1.42", "m20.49 20.49-1.42-1.42", "M4 12H2", "M22 12h-2", "m4.93 19.07-1.42 1.42", "m20.49 3.51-1.42 1.42", "M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"],
   moon: ["M21 14.8A8.5 8.5 0 0 1 9.2 3 7 7 0 1 0 21 14.8Z"],
   eye: ["M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z", "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"],
-  eyeOff: ["M3 3l18 18", "M10.6 10.6a3 3 0 0 0 3.8 3.8", "M9.9 5.2A10.8 10.8 0 0 1 12 5c6 0 9.5 7 9.5 7a16 16 0 0 1-2.6 3.5", "M6.4 6.4C3.8 8.1 2.5 12 2.5 12s3.5 7 9.5 7a10.5 10.5 0 0 0 5-1.3"]
+  eyeOff: ["M3 3l18 18", "M10.6 10.6a3 3 0 0 0 3.8 3.8", "M9.9 5.2A10.8 10.8 0 0 1 12 5c6 0 9.5 7 9.5 7a16 16 0 0 1-2.6 3.5", "M6.4 6.4C3.8 8.1 2.5 12 2.5 12s3.5 7 9.5 7a10.5 10.5 0 0 0 5-1.3"],
+  user: ["M20 21a8 8 0 0 0-16 0", "M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"],
+  chevronRight: ["M9 18l6-6-6-6"],
+  briefcase: ["M10 6V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v1", "M4 7h16v12H4z", "M9 12h6"],
+  bank: ["M4 10h16", "M5 10l7-5 7 5", "M6 10v8", "M10 10v8", "M14 10v8", "M18 10v8", "M4 18h16"],
+  crown: ["M5 16h14", "M6 16 5 8l5 4 2-6 2 6 5-4-1 8", "M7 20h10"],
+  shield: ["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z", "m9 12 2 2 4-5"],
+  plus: ["M12 5v14", "M5 12h14"]
 };
 
 function App() {
@@ -654,7 +661,7 @@ function FinanceApp({
         </div>
       </div>
 
-      <header className={compactHeader ? "top-app-bar top-app-bar-compact" : "top-app-bar"}>
+      <header className={`${compactHeader ? "top-app-bar top-app-bar-compact" : "top-app-bar"}${activeHouseholdScreen ? " household-top-app-bar" : ""}`}>
         {showHouseholdBackButton && (
           <div className="top-leading-action">
             <button className="icon-button" type="button" onClick={() => setHouseholdScreen({ mode: "list" })} aria-label="Voltar para contas" title="Voltar para contas">
@@ -1096,14 +1103,16 @@ function AuthGate({ checking = false, configured, notice = "", onDemo }: { check
           <p role="status">Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no .env.local.</p>
         ) : (
           <>
-            <div className="auth-tabs" role="group" aria-label="Acesso">
-              <button className={mode === "sign-in" ? "active" : ""} type="button" onClick={() => setMode("sign-in")}>
-                Entrar
-              </button>
-              <button className={mode === "sign-up" ? "active" : ""} type="button" onClick={() => setMode("sign-up")}>
-                Criar
-              </button>
-            </div>
+            {mode !== "reset" && (
+              <div className="auth-tabs" role="group" aria-label="Acesso">
+                <button className={mode === "sign-in" ? "active" : ""} type="button" onClick={() => setMode("sign-in")}>
+                  Entrar
+                </button>
+                <button className={mode === "sign-up" ? "active" : ""} type="button" onClick={() => setMode("sign-up")}>
+                  Criar
+                </button>
+              </div>
+            )}
             <label>
               E-mail
               <input
@@ -1146,9 +1155,20 @@ function AuthGate({ checking = false, configured, notice = "", onDemo }: { check
             <button className="tonal-button demo-access-button" type="button" onClick={onDemo}>
               Modo demo
             </button>
-            <button className="text-button" type="button" onClick={() => setMode(mode === "reset" ? "sign-in" : "reset")}>
-              {mode === "reset" ? "Voltar para login" : "Esqueci minha senha"}
-            </button>
+            {mode === "reset" ? (
+              <div className="auth-secondary-actions" aria-label="Acesso alternativo">
+                <button className="text-button" type="button" onClick={() => setMode("sign-in")}>
+                  Lembrou a senha? Entrar
+                </button>
+                <button className="text-button" type="button" onClick={() => setMode("sign-up")}>
+                  Não tem conta? Criar conta
+                </button>
+              </div>
+            ) : (
+              <button className="text-button" type="button" onClick={() => setMode("reset")}>
+                Esqueci minha senha
+              </button>
+            )}
             <div className="access-links">
               <a href="/privacy.html">Política de privacidade</a>
               <span aria-hidden="true">|</span>
@@ -2368,6 +2388,7 @@ function HouseholdManagerPage({
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<HouseholdRole>("member");
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
+  const [passwordResetOpen, setPasswordResetOpen] = useState(false);
   const canManageMembers = canManageHousehold(editingHousehold);
 
   useEffect(() => {
@@ -2406,18 +2427,42 @@ function HouseholdManagerPage({
 
   const identity = (
     <div className="household-current">
-      <span>Conectado como</span>
-      <strong>{currentUserEmail}</strong>
+      <div>
+        <span>Conectado como</span>
+        <strong>{currentUserEmail}</strong>
+      </div>
+      <button className="text-button compact-button" type="button" onClick={() => setPasswordResetOpen(true)}>
+        Redefinir senha
+      </button>
     </div>
   );
+  const passwordResetDialog = passwordResetOpen ? <PasswordResetDialog currentUserEmail={currentUserEmail} onClose={() => setPasswordResetOpen(false)} /> : null;
 
   if (screen.mode === "list") {
     return (
       <div className="household-manager">
-        {identity}
-        <div className="section-title">
-          <span>Contas</span>
-          <button className="tonal-button compact-button" type="button" onClick={onNew}>
+        <div className="household-identity-card">
+          <div className="household-identity-icon" aria-hidden="true">
+            <UiIcon name="user" />
+          </div>
+          <div className="household-identity-copy">
+            <span>Conectado como</span>
+            <strong>{currentUserEmail}</strong>
+          </div>
+          <button className="household-reset-link" type="button" onClick={() => setPasswordResetOpen(true)}>
+            <span>Redefinir senha</span>
+            <UiIcon name="chevronRight" />
+          </button>
+        </div>
+        <div className="household-list-header">
+          <div className="household-section-heading">
+            <span className="household-section-icon" aria-hidden="true">
+              <UiIcon name="briefcase" />
+            </span>
+            <span>Minhas contas</span>
+          </div>
+          <button className="household-new-button" type="button" onClick={onNew}>
+            <UiIcon name="plus" />
             Nova conta
           </button>
         </div>
@@ -2430,22 +2475,31 @@ function HouseholdManagerPage({
 
               return (
                 <article key={household.id} className={household.id === selectedHouseholdId ? "household-row active" : "household-row"} role="listitem">
+                  <div className="household-row-icon" aria-hidden="true">
+                    <UiIcon name="bank" />
+                  </div>
                   <div className="household-row-main">
                     <span>{household.name}</span>
-                    <small>{roleLabel(household.role)}</small>
+                    <small className={`household-role-chip role-${household.role}`}>
+                      <UiIcon name={roleIcon(household.role)} />
+                      {roleLabel(household.role)}
+                    </small>
                   </div>
                   <div className="household-row-actions">
                     {canManage && (
                       <button className="household-action-button" type="button" onClick={() => onEdit(household.id)} aria-label={`Editar ${household.name}`} title="Editar">
                         <UiIcon name="edit" />
+                        <span>Editar</span>
                       </button>
                     )}
                     <button className="household-action-button" type="button" onClick={() => onSelect(household.id)} aria-label={`Acessar ${household.name}`} title="Acessar">
                       <UiIcon name="external" />
+                      <span>Acessar</span>
                     </button>
                     {canManage && (
                       <button className="household-action-button danger" type="button" onClick={() => onDelete(household)} aria-label={`Excluir ${household.name}`} title="Excluir">
                         <UiIcon name="delete" />
+                        <span>Excluir</span>
                       </button>
                     )}
                   </div>
@@ -2454,6 +2508,7 @@ function HouseholdManagerPage({
             })
           )}
         </div>
+        {passwordResetDialog}
       </div>
     );
   }
@@ -2471,6 +2526,7 @@ function HouseholdManagerPage({
             Criar conta
           </button>
         </form>
+        {passwordResetDialog}
       </div>
     );
   }
@@ -2496,6 +2552,7 @@ function HouseholdManagerPage({
             Acessar
           </button>
         </div>
+        {passwordResetDialog}
       </div>
     );
   }
@@ -2595,7 +2652,148 @@ function HouseholdManagerPage({
           </form>
         </BottomSheet>
       )}
+      {passwordResetDialog}
     </div>
+  );
+}
+
+function PasswordResetDialog({ currentUserEmail, onClose }: { currentUserEmail: string; onClose: () => void }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [currentVisible, setCurrentVisible] = useState(false);
+  const [newVisible, setNewVisible] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [dialog, setDialog] = useState<{ tone: DialogTone; title: string; message: string; onClose?: () => void } | null>(null);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (submitting) return;
+
+    if (newPassword !== confirmPassword) {
+      setDialog({
+        tone: "error",
+        title: "Senhas diferentes",
+        message: "Digite a mesma nova senha nos dois campos."
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: currentUserEmail.trim(),
+        password: currentPassword
+      });
+      if (signInError) throw signInError;
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) throw updateError;
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setDialog({
+        tone: "info",
+        title: "Senha redefinida",
+        message: "Sua senha foi atualizada com sucesso.",
+        onClose
+      });
+    } catch (error) {
+      setDialog({
+        tone: "error",
+        title: "Não foi possível redefinir a senha",
+        message: translateAuthError(error)
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function handleDialogConfirm() {
+    const dialogClose = dialog?.onClose;
+    setDialog(null);
+    dialogClose?.();
+  }
+
+  return (
+    <div className="dialog-backdrop">
+      <section className="material-dialog password-reset-dialog info" role="dialog" aria-modal="true" aria-labelledby="password-reset-title">
+        <h2 id="password-reset-title">Redefinir senha</h2>
+        <form className="password-reset-form" onSubmit={handleSubmit}>
+          <PasswordField
+            label="Senha atual"
+            value={currentPassword}
+            visible={currentVisible}
+            autoComplete="current-password"
+            onChange={setCurrentPassword}
+            onToggleVisible={() => setCurrentVisible((visible) => !visible)}
+          />
+          <PasswordField
+            label="Nova senha"
+            value={newPassword}
+            visible={newVisible}
+            autoComplete="new-password"
+            onChange={setNewPassword}
+            onToggleVisible={() => setNewVisible((visible) => !visible)}
+          />
+          <PasswordField
+            label="Confirmar nova senha"
+            value={confirmPassword}
+            visible={confirmVisible}
+            autoComplete="new-password"
+            onChange={setConfirmPassword}
+            onToggleVisible={() => setConfirmVisible((visible) => !visible)}
+          />
+          <div className="dialog-actions">
+            <button className="text-button" type="button" onClick={onClose}>
+              Cancelar
+            </button>
+            <button className="filled-button" type="submit" disabled={submitting}>
+              {submitting ? "Salvando..." : "Salvar"}
+            </button>
+          </div>
+        </form>
+      </section>
+      {dialog && <MaterialDialog tone={dialog.tone} title={dialog.title} message={dialog.message} onConfirm={handleDialogConfirm} />}
+    </div>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  visible,
+  autoComplete,
+  onChange,
+  onToggleVisible
+}: {
+  label: string;
+  value: string;
+  visible: boolean;
+  autoComplete: "current-password" | "new-password";
+  onChange: (value: string) => void;
+  onToggleVisible: () => void;
+}) {
+  return (
+    <label>
+      {label}
+      <span className="password-field">
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          type={visible ? "text" : "password"}
+          autoComplete={autoComplete}
+          minLength={6}
+          required
+        />
+        <button className="password-visibility-button" type="button" aria-label={visible ? "Ocultar senha" : "Mostrar senha"} onClick={onToggleVisible}>
+          <UiIcon name={visible ? "eyeOff" : "eye"} />
+        </button>
+      </span>
+    </label>
   );
 }
 
@@ -2603,6 +2801,12 @@ function roleLabel(role: HouseholdRole): string {
   if (role === "owner") return "Dono";
   if (role === "admin") return "Administrador";
   return "Membro";
+}
+
+function roleIcon(role: HouseholdRole): UiIconName {
+  if (role === "owner") return "crown";
+  if (role === "admin") return "shield";
+  return "user";
 }
 
 function canManageHousehold(household?: Pick<HouseholdSummary, "role">): boolean {

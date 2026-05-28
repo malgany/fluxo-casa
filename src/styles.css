@@ -450,6 +450,12 @@ textarea {
   color: var(--on-primary-container);
 }
 
+.auth-secondary-actions {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+}
+
 .access-panel label,
 .access-panel button,
 .access-panel .access-links,
@@ -662,6 +668,35 @@ textarea {
   min-height: calc(128px + env(safe-area-inset-top));
   padding: env(safe-area-inset-top) 4px 12px 16px;
   background: var(--surface);
+}
+
+.household-top-app-bar {
+  background:
+    radial-gradient(circle at 96% 12%, color-mix(in srgb, var(--primary-container) 68%, transparent) 0 46px, transparent 47px),
+    radial-gradient(circle at 83% -4%, color-mix(in srgb, var(--primary-container) 76%, transparent) 0 128px, transparent 129px),
+    linear-gradient(135deg, color-mix(in srgb, var(--primary-container) 72%, var(--surface)) 0%, color-mix(in srgb, var(--primary-container) 52%, var(--surface)) 100%);
+  box-shadow: none;
+}
+
+.household-top-app-bar .icon-button {
+  background: color-mix(in srgb, var(--surface-container-lowest) 92%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--shadow-color) 18%, transparent);
+}
+
+.household-top-app-bar .icon-button:hover,
+.household-top-app-bar .icon-button:focus-visible {
+  background: var(--surface-container-lowest);
+}
+
+.household-top-app-bar h1 {
+  color: var(--on-surface);
+  font-size: 2.1rem;
+  font-weight: 800;
+}
+
+.household-top-app-bar .top-title span {
+  color: color-mix(in srgb, var(--on-surface-variant) 88%, transparent);
+  font-weight: 600;
 }
 
 .top-app-bar-compact {
@@ -2495,12 +2530,148 @@ select {
 }
 
 .household-content {
-  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+  background:
+    radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--primary-container) 24%, transparent) 0 80px, transparent 82px),
+    var(--surface);
 }
 
 .household-manager {
   display: grid;
-  gap: 16px;
+  gap: 22px;
+}
+
+.household-identity-card {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 96px;
+  align-items: center;
+  gap: 10px;
+  min-height: 80px;
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--outline-variant));
+  border-radius: 8px;
+  padding: 14px 12px;
+  background: color-mix(in srgb, var(--surface-container-lowest) 96%, transparent);
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--primary) 9%, transparent);
+}
+
+.household-identity-icon,
+.household-section-icon,
+.household-row-icon,
+.household-action-button::before {
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--primary-container) 76%, var(--surface-container-lowest));
+  color: var(--primary);
+}
+
+.household-identity-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--shape-full);
+}
+
+.household-identity-icon .ui-icon {
+  width: 25px;
+  height: 25px;
+}
+
+.household-identity-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.household-identity-copy span {
+  color: var(--on-surface-variant);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.household-identity-copy strong {
+  overflow: hidden;
+  color: var(--on-surface);
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.household-reset-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  border-radius: var(--shape-full);
+  padding: 0 0 0 8px;
+  background: transparent;
+  color: var(--primary);
+  justify-content: end;
+  font-size: 0.64rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.household-reset-link .ui-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.household-reset-link:hover,
+.household-reset-link:focus-visible {
+  background: var(--state-primary-hover);
+  outline: 0;
+}
+
+.household-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.household-section-heading {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  color: var(--on-surface);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.household-section-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+.household-section-icon .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.household-new-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  border-radius: var(--shape-full);
+  padding: 0 18px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 800;
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--primary) 24%, transparent);
+}
+
+.household-new-button .ui-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.household-new-button:hover,
+.household-new-button:focus-visible {
+  background: color-mix(in srgb, var(--primary) 92%, black);
+  outline: 0;
 }
 
 .household-form {
@@ -2509,11 +2680,26 @@ select {
 }
 
 .household-current {
-  display: grid;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 2px;
   border-radius: var(--shape-small);
   padding: 12px 14px;
   background: var(--surface-container-high);
+}
+
+.household-current > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.household-current .compact-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding-inline: 12px;
+  font-size: 0.86rem;
 }
 
 .household-current span {
@@ -2529,27 +2715,58 @@ select {
   white-space: nowrap;
 }
 
+.password-reset-dialog {
+  width: min(100%, 368px);
+}
+
+.password-reset-form {
+  display: grid;
+  gap: 14px;
+}
+
+.password-reset-form .dialog-actions {
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.password-reset-form .filled-button {
+  min-width: 96px;
+}
+
 .household-list {
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
 .household-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid var(--outline-variant);
-  border-radius: var(--shape-small);
-  padding: 10px 12px;
-  background: var(--surface-container-lowest);
+  gap: 10px;
+  min-height: 90px;
+  border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--outline-variant));
+  border-radius: 8px;
+  padding: 14px 8px 14px 12px;
+  background: color-mix(in srgb, var(--surface-container-lowest) 98%, transparent);
   color: var(--on-surface);
+  box-shadow: 0 12px 26px color-mix(in srgb, var(--primary) 9%, transparent);
 }
 
 .household-row.active {
   border-color: var(--primary);
-  background: var(--primary-container);
-  color: var(--on-primary-container);
+  background: color-mix(in srgb, var(--surface-container-lowest) 88%, var(--primary-container));
+  color: var(--on-surface);
+}
+
+.household-row-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+}
+
+.household-row-icon .ui-icon {
+  width: 26px;
+  height: 26px;
 }
 
 .household-row-main {
@@ -2565,29 +2782,71 @@ select {
 }
 
 .household-row-actions {
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
   flex: 0 0 auto;
-  gap: 4px;
+  gap: 2px;
 }
 
 .household-action-button {
-  display: inline-grid;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 38px 12px;
+  justify-items: center;
   width: 40px;
-  height: 40px;
-  place-items: center;
-  border-radius: var(--shape-full);
+  min-height: 54px;
+  gap: 4px;
+  border-radius: 10px;
   padding: 0;
   background: transparent;
   color: var(--primary);
+  font-size: 0.54rem;
+  font-weight: 600;
+}
+
+.household-action-button::before {
+  content: "";
+  grid-column: 1;
+  grid-row: 1;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--shape-full);
+}
+
+.household-action-button .ui-icon {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  z-index: 1;
+}
+
+.household-action-button span {
+  grid-column: 1;
+  grid-row: 2;
+  color: currentColor;
+  line-height: 1;
 }
 
 .household-action-button:hover,
 .household-action-button:focus-visible {
-  background: var(--state-primary-hover);
+  background: transparent;
   outline: 0;
 }
 
+.household-action-button:hover::before,
+.household-action-button:focus-visible::before {
+  background: color-mix(in srgb, var(--primary-container) 92%, var(--surface-container-lowest));
+}
+
 .household-action-button.danger {
+  color: var(--red);
+}
+
+.household-action-button.danger::before {
+  background: color-mix(in srgb, var(--red-container) 86%, var(--surface-container-lowest));
   color: var(--red);
 }
 
@@ -2608,17 +2867,43 @@ select {
 
 .household-row-main span {
   overflow: hidden;
+  font-size: 0.84rem;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.household-row-main small,
-.household-list small {
-  color: inherit;
-  opacity: 0.72;
-  font-size: 0.78rem;
-  font-weight: 700;
+.household-role-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  width: fit-content;
+  gap: 4px;
+  border-radius: var(--shape-full);
+  padding: 0 7px;
+  background: color-mix(in srgb, var(--primary-container) 76%, var(--surface-container-lowest));
+  color: var(--primary);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.household-role-chip.role-admin {
+  background: color-mix(in srgb, var(--blue-container) 72%, var(--surface-container-lowest));
+  color: var(--blue);
+}
+
+.household-role-chip.role-member {
+  background: color-mix(in srgb, var(--on-surface-variant) 10%, transparent);
+  color: var(--on-surface-variant);
+}
+
+.household-role-chip .ui-icon {
+  width: 12px;
+  height: 12px;
+  color: currentColor;
 }
 
 .household-actions {

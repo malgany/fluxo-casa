@@ -3,7 +3,7 @@
   "short_name": "Fluxo Casa",
   "start_url": "/",
   "scope": "/",
-  "display": "fullscreen",
+  "display": "standalone",
   "orientation": "portrait",
   "background_color": "#fef7ff",
   "theme_color": "#6750a4",

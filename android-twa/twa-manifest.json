@@ -3,7 +3,7 @@
   "host": "fluxo-casa-phi.vercel.app",
   "name": "Fluxo Casa",
   "launcherName": "Fluxo Casa",
-  "display": "fullscreen",
+  "display": "standalone",
   "themeColor": "#6750A4",
   "themeColorDark": "#000000",
   "navigationColor": "#000000",
