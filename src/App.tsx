@@ -75,6 +75,20 @@ const DEMO_SESSION = {
 const SWIPE_ACTION_WIDTH = 108;
 const SWIPE_TRIGGER_DISTANCE = 72;
 const INSTALLMENT_COUNT_OPTIONS = Array.from({ length: MAX_INSTALLMENT_COUNT - 1 }, (_, index) => index + 2);
+const FALLBACK_ICON_GRADIENTS = [
+  ["#ff6b9d", "#6c63ff"],
+  ["#00b894", "#00cec9", "#0984e3"],
+  ["#f9ca24", "#f0932b", "#eb4d4b"],
+  ["#a29bfe", "#fd79a8"],
+  ["#22a6b3", "#6ab04c", "#badc58"],
+  ["#e056fd", "#686de0", "#30336b"],
+  ["#ff7675", "#fdcb6e"],
+  ["#48dbfb", "#1dd1a1", "#5f27cd"],
+  ["#ff9ff3", "#54a0ff"],
+  ["#10ac84", "#2e86de"],
+  ["#f368e0", "#ff9f43", "#ee5253"],
+  ["#00d2d3", "#341f97"]
+] as const;
 const DASHBOARD_PERIOD_OFFSETS: Record<DashboardPeriod, number> = {
   previous: -1,
   current: 0,
@@ -2161,39 +2175,39 @@ function EntrySheet({
           </button>
         </div>
 
-        <label>
+        <label className="title-field">
           Título
-          <input
-            value={selectedIcon ? "" : title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder={selectedIcon ? `${selectedIcon.label} selecionado` : "Salário, farmácia, iFood"}
-            disabled={Boolean(selectedIcon)}
-            required={!selectedIcon}
-            autoFocus
-          />
-        </label>
-
-        {(selectedIcon || iconSuggestions.length > 0) && (
-          <div className="icon-picker" aria-label="Sugestões de ícone">
+          <span className={selectedIcon ? "title-input-shell has-selected-icon" : "title-input-shell"}>
+            <input
+              value={selectedIcon ? "" : title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder={selectedIcon ? "" : "Salário, farmácia, iFood"}
+              readOnly={Boolean(selectedIcon)}
+              required={!selectedIcon}
+              autoFocus
+            />
             {selectedIcon && (
-              <div className="selected-icon-chip">
+              <span className="selected-icon-chip">
                 <ServiceIconImage icon={selectedIcon} />
                 <span>{selectedIcon.label}</span>
                 <button type="button" onClick={() => setSelectedIconId(undefined)} aria-label="Remover ícone">
                   ×
                 </button>
-              </div>
+              </span>
             )}
-            {iconSuggestions.length > 0 && (
-              <div className="icon-suggestions">
-                {iconSuggestions.map((icon) => (
-                  <button key={icon.id} type="button" onClick={() => setSelectedIconId(icon.id)}>
-                    <ServiceIconImage icon={icon} />
-                    <span>{icon.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+          </span>
+        </label>
+
+        {iconSuggestions.length > 0 && (
+          <div className="icon-picker" aria-label="Sugestões de ícone">
+            <div className="icon-suggestions">
+              {iconSuggestions.map((icon) => (
+                <button key={icon.id} type="button" onClick={() => setSelectedIconId(icon.id)}>
+                  <ServiceIconImage icon={icon} />
+                  <span>{icon.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -2867,7 +2881,11 @@ function TimelineIcon({ item }: { item: MonthSnapshot["items"][number] }) {
     );
   }
 
-  return <div className="entry-icon fallback">{initialFor(item.title)}</div>;
+  return (
+    <div className="entry-icon fallback" style={fallbackIconStyle(`${item.title}:${item.recordId}`)}>
+      {initialFor(item.title)}
+    </div>
+  );
 }
 
 function ServiceIconImage({ icon }: { icon: ServiceIcon }) {
@@ -2876,6 +2894,23 @@ function ServiceIconImage({ icon }: { icon: ServiceIcon }) {
 
 function initialFor(title: string): string {
   return title.trim().charAt(0).toLocaleUpperCase("pt-BR") || "?";
+}
+
+function fallbackIconStyle(seed: string): CSSProperties {
+  const hash = hashString(seed);
+  const colors = FALLBACK_ICON_GRADIENTS[hash % FALLBACK_ICON_GRADIENTS.length];
+  const angle = 120 + (hash % 90);
+  return {
+    "--fallback-icon-bg": `linear-gradient(${angle}deg, ${colors.join(", ")})`
+  } as CSSProperties;
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (const char of value) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+  return hash;
 }
 
 export default App;
