@@ -664,6 +664,12 @@ textarea {
   background: var(--surface);
 }
 
+.top-app-bar-compact {
+  grid-template-rows: 52px;
+  min-height: calc(64px + env(safe-area-inset-top));
+  padding-bottom: 4px;
+}
+
 .top-title {
   grid-column: 1 / -1;
   grid-row: 2;
@@ -1205,17 +1211,18 @@ textarea {
 
 .period-select-button {
   position: relative;
-  min-width: 96px;
-  max-width: 116px;
+  min-width: 112px;
+  max-width: 128px;
   border: 0;
   border-radius: var(--shape-full);
-  padding: 6px 28px 6px 12px;
+  padding: 6px 30px 6px 12px;
   background: color-mix(in srgb, #ffffff 14%, transparent);
   color: var(--hero-balance-fg, #ffffff);
   font: inherit;
   font-size: 0.78rem;
   font-weight: 700;
   text-align: left;
+  white-space: nowrap;
 }
 
 .period-select-button::after {
@@ -1481,15 +1488,35 @@ textarea {
 }
 
 .month-strip button {
+  display: inline-grid;
+  width: 44px;
   min-height: 38px;
+  place-items: center;
   border-radius: var(--shape-full);
-  padding: 0 12px;
+  padding: 0;
   background: transparent;
   color: var(--on-surface-variant);
   font-weight: 700;
   transition:
     background var(--duration-short) var(--easing-standard),
     color var(--duration-short) var(--easing-standard);
+}
+
+.month-strip button:first-child {
+  justify-self: start;
+}
+
+.month-strip button:last-child {
+  justify-self: end;
+}
+
+.month-strip button .ui-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.month-strip-next .ui-icon {
+  transform: rotate(180deg);
 }
 
 .month-strip button:not(:disabled):hover,
@@ -1506,7 +1533,7 @@ textarea {
 .month-strip strong {
   display: inline-grid;
   min-height: 38px;
-  min-width: 98px;
+  min-width: 156px;
   place-items: center;
   border-radius: var(--shape-full);
   padding: 0 16px 1px;
@@ -1585,8 +1612,7 @@ textarea {
 .timeline-list-section {
   align-self: stretch;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
+  grid-template-rows: minmax(0, 1fr);
   width: 100%;
   max-height: 100%;
   min-height: 0;

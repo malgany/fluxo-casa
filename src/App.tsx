@@ -23,7 +23,6 @@ import {
   formatMoney,
   monthKey,
   monthLabel,
-  monthName,
   previousDay,
   todayIso,
   yearLabel
@@ -287,6 +286,8 @@ function FinanceApp({
     : undefined;
   const selectedHousehold = selectedHouseholdId ? households.find((household) => household.id === selectedHouseholdId) : undefined;
   const canManageSelectedHousehold = canManageHousehold(selectedHousehold);
+  const showHeaderTitle = Boolean(activeHouseholdScreen || view === "home");
+  const compactHeader = insideSelectedHousehold && view === "timeline" && !activeHouseholdScreen;
   const headerTitle = activeHouseholdScreen
     ? activeHouseholdScreen.mode === "edit"
       ? "Editar conta"
@@ -639,7 +640,7 @@ function FinanceApp({
         </div>
       </div>
 
-      <header className="top-app-bar">
+      <header className={compactHeader ? "top-app-bar top-app-bar-compact" : "top-app-bar"}>
         {showHouseholdBackButton && (
           <div className="top-leading-action">
             <button className="icon-button" type="button" onClick={() => setHouseholdScreen({ mode: "list" })} aria-label="Voltar para contas" title="Voltar para contas">
@@ -647,10 +648,12 @@ function FinanceApp({
             </button>
           </div>
         )}
-        <div className="top-title">
-          <h1>{headerTitle}</h1>
-          <span>{headerSubtitle}</span>
-        </div>
+        {showHeaderTitle && (
+          <div className="top-title">
+            <h1>{headerTitle}</h1>
+            <span>{headerSubtitle}</span>
+          </div>
+        )}
         {insideSelectedHousehold && selectedHousehold?.name && (
           <div className="top-account-label" title={`Conta atual: ${selectedHousehold.name}`}>
             {selectedHousehold.name}
@@ -1903,12 +1906,12 @@ function MonthPage({
   return (
     <div className="month-page" aria-hidden={!visible} data-visible={visible ? "true" : "false"}>
       <div className="month-strip">
-        <button type="button" onClick={onPrevious} disabled={disabled} tabIndex={visible ? undefined : -1}>
-          {monthName(addMonths(snapshot.month, -1))}
+        <button type="button" onClick={onPrevious} disabled={disabled} tabIndex={visible ? undefined : -1} aria-label="Mês anterior">
+          <UiIcon name="back" />
         </button>
-        <strong>{monthName(snapshot.month)}</strong>
-        <button type="button" onClick={onNext} disabled={disabled} tabIndex={visible ? undefined : -1}>
-          {monthName(addMonths(snapshot.month, 1))}
+        <strong>{monthLabel(snapshot.month)}</strong>
+        <button className="month-strip-next" type="button" onClick={onNext} disabled={disabled} tabIndex={visible ? undefined : -1} aria-label="Próximo mês">
+          <UiIcon name="back" />
         </button>
       </div>
 
@@ -1927,9 +1930,6 @@ function MonthPage({
 
       <div className="timeline-scroll">
         <div className="timeline-list-section">
-          <div className="timeline-list-header">
-            <h2>Movimentos</h2>
-          </div>
           <div className="timeline-list" role="list" aria-label="Lançamentos do mês">
             {snapshot.items.length === 0 ? (
               <div className="empty-state">Nenhum lançamento neste mês.</div>
