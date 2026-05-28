@@ -2,7 +2,8 @@ import { type Session } from "@supabase/supabase-js";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { db, createBase, ensureSettings, exportBackup, importBackup, saveRecord, softDelete } from "./lib/db";
-import { syncNow } from "./lib/sync";
+import { MUTATION_SYNC_DEBOUNCE_MS, useHouseholdSync } from "./lib/useHouseholdSync";
+import type { SyncIndicatorState } from "./lib/syncScheduler";
 import {
   createHousehold,
   getHouseholdMembers,
@@ -36,7 +37,6 @@ import type { AppSettings, Entry, FlowKind, Household, HouseholdInvitation, Hous
 
 type View = "home" | "timeline";
 type Sheet = "entry" | "balance" | null;
-type SyncIndicatorState = "idle" | "syncing" | "synced" | "error";
 type ThemeMode = "light-new" | "light" | "dark";
 type MaterialIconName = "wallet" | "update" | "export" | "import" | "add" | "lightMode" | "routine" | "darkMode";
 type UiIconName = "home" | "list" | "more" | "back" | "close" | "delete" | "edit" | "external" | "moon" | "sun" | "lock" | "users" | "info" | "warning" | "eye" | "eyeOff";
@@ -197,17 +197,17 @@ function FinanceApp({
   const [deletingHousehold, setDeletingHousehold] = useState<HouseholdSummary | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [message, setMessage] = useState("");
-  const [syncState, setSyncState] = useState<SyncIndicatorState>("idle");
-  const [syncHint, setSyncHint] = useState("Ainda não sincronizado");
-  const [syncHintVisible, setSyncHintVisible] = useState(false);
   const [households, setHouseholds] = useState<HouseholdSummary[]>([]);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
   const [householdLoading, setHouseholdLoading] = useState(true);
   const [householdScreen, setHouseholdScreen] = useState<HouseholdScreen | null>(null);
+  const { state: syncState, hint: syncHint, hintVisible: syncHintVisible, requestSync } = useHouseholdSync({
+    householdId: selectedHouseholdId,
+    demoMode
+  });
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const syncingRef = useRef(false);
   const demoLoadingDelayShownRef = useRef(false);
 
   useEffect(() => {
@@ -234,31 +234,6 @@ function FinanceApp({
 
     void clearDevelopmentCaches();
   }, []);
-
-  useEffect(() => {
-    if (!selectedHouseholdId) return undefined;
-
-    void runSync(false);
-
-    const interval = window.setInterval(() => void runSync(false), 15 * 60 * 1000);
-
-    function syncWhenOnline() {
-      void runSync(false);
-    }
-
-    function syncWhenVisible() {
-      if (document.visibilityState === "visible") void runSync(false);
-    }
-
-    window.addEventListener("online", syncWhenOnline);
-    document.addEventListener("visibilitychange", syncWhenVisible);
-
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("online", syncWhenOnline);
-      document.removeEventListener("visibilitychange", syncWhenVisible);
-    };
-  }, [selectedHouseholdId]);
 
   const entries = useLiveQuery<Entry[]>(
     () => (selectedHouseholdId ? db.entries.where("householdId").equals(selectedHouseholdId).toArray() : Promise.resolve([])),
@@ -339,13 +314,6 @@ function FinanceApp({
   }, [message]);
 
   useEffect(() => {
-    if (!syncHintVisible) return undefined;
-
-    const timer = window.setTimeout(() => setSyncHintVisible(false), 2200);
-    return () => window.clearTimeout(timer);
-  }, [syncHintVisible, syncHint]);
-
-  useEffect(() => {
     if (!menuOpen) return undefined;
 
     menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
@@ -416,7 +384,7 @@ function FinanceApp({
     setMenuOpen(false);
     setView("home");
     await ensureSettings(householdId);
-    void runSync(false, householdId);
+    requestSync({ reason: "household-select", householdId });
   }
 
   async function handleCreateHousehold(name: string) {
@@ -436,7 +404,7 @@ function FinanceApp({
       await ensureSettings(context.selectedHouseholdId);
       setMessage("Conta criada.");
       setHouseholdScreen({ mode: "edit", householdId: context.selectedHouseholdId });
-      void runSync(false, context.selectedHouseholdId);
+      requestSync({ reason: "household-create", householdId: context.selectedHouseholdId });
     } catch (error) {
       if (await handlePermissionError(error)) return;
       setMessage(errorMessage(error, "Não foi possível criar a conta."));
@@ -543,39 +511,6 @@ function FinanceApp({
     setMenuOpen(false);
   }
 
-  function revealSyncHint(text?: string) {
-    if (text) setSyncHint(text);
-    setSyncHintVisible(true);
-  }
-
-  async function runSync(showHint: boolean, targetHouseholdId = selectedHouseholdId) {
-    if (!targetHouseholdId) return;
-    if (demoMode) {
-      setSyncState("synced");
-      setSyncHint("Modo demo");
-      if (showHint) setSyncHintVisible(true);
-      return;
-    }
-
-    if (syncingRef.current) {
-      if (showHint) revealSyncHint("Atualizando...");
-      return;
-    }
-    syncingRef.current = true;
-    setSyncState("syncing");
-    setSyncHint("Atualizando...");
-    if (showHint) setSyncHintVisible(true);
-
-    try {
-      const result = await syncNow(targetHouseholdId);
-      setSyncState(result.ok ? "synced" : "error");
-      setSyncHint(result.ok ? "Sincronizado" : result.message);
-      if (showHint || !result.ok) setSyncHintVisible(true);
-    } finally {
-      syncingRef.current = false;
-    }
-  }
-
   async function handleExport() {
     if (!selectedHouseholdId || !canManageSelectedHousehold) return;
     const backup = await exportBackup(selectedHouseholdId);
@@ -594,6 +529,7 @@ function FinanceApp({
     await importBackup(JSON.parse(await file.text()), selectedHouseholdId);
     setMessage("Backup importado.");
     setMenuOpen(false);
+    requestSync({ reason: "mutation", delayMs: MUTATION_SYNC_DEBOUNCE_MS });
   }
 
   function handleNewEntry() {
@@ -640,7 +576,7 @@ function FinanceApp({
     await softDelete(deletingMovement.source === "entry" ? "entries" : "recurrences", deletingMovement.recordId);
     setMessage(deletingMovement.source === "recurrence" ? "Recorrência excluída." : "Lançamento excluído.");
     setDeletingMovement(null);
-    void runSync(false);
+    requestSync({ reason: "mutation", delayMs: MUTATION_SYNC_DEBOUNCE_MS });
   }
 
   function handleCloseEntrySheet() {
@@ -654,7 +590,7 @@ function FinanceApp({
       setView("timeline");
     }
     setEditingMovement(null);
-    void runSync(false);
+    requestSync({ reason: "mutation", delayMs: MUTATION_SYNC_DEBOUNCE_MS });
   }
 
   function handleOverflowMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -709,7 +645,7 @@ function FinanceApp({
           </div>
         )}
         <div className="app-actions">
-          {insideSelectedHousehold && <SyncIndicator state={syncState} hint={syncHint} visible={syncHintVisible} onPress={() => revealSyncHint()} />}
+          {insideSelectedHousehold && <SyncIndicator state={syncState} hint={syncHint} visible={syncHintVisible} onPress={() => requestSync({ reason: "manual", showHint: true })} />}
           <button
             ref={menuButtonRef}
             className="icon-button"
@@ -798,7 +734,7 @@ function FinanceApp({
             data={data}
             month={timelineMonth}
             setMonth={setTimelineMonth}
-            onChanged={() => void runSync(false)}
+            onChanged={() => requestSync({ reason: "mutation", delayMs: MUTATION_SYNC_DEBOUNCE_MS })}
             onEditMovement={handleEditMovement}
             onDeleteMovement={(item) => void handleDeleteMovement(item)}
           />
@@ -844,7 +780,9 @@ function FinanceApp({
           onSaved={handleEntrySaved}
         />
       )}
-      {sheet === "balance" && canManageSelectedHousehold && <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} onSaved={() => void runSync(false)} />}
+      {sheet === "balance" && canManageSelectedHousehold && (
+        <BalanceSheet settings={data.settings} onClose={() => setSheet(null)} onSaved={() => requestSync({ reason: "mutation", delayMs: MUTATION_SYNC_DEBOUNCE_MS })} />
+      )}
       {deletingHousehold && (
         <DeleteHouseholdSheet
           household={deletingHousehold}
