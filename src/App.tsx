@@ -149,6 +149,7 @@ function App() {
   const [authNotice, setAuthNotice] = useState("");
   const supabaseConfigured = isSupabaseConfigured();
   const productionDesktopGate = productionDesktopGateMode();
+  const demoAccessEnabled = demoAccessMode();
 
   useEffect(() => {
     const appliedTheme = theme === "dark" ? "dark" : "light";
@@ -204,7 +205,20 @@ function App() {
   if (productionDesktopGate === "landing") return <DesktopLandingPage />;
 
   if (checkingSession) return <PreloadGate />;
-  if (!session && !demoMode) return <AuthGate configured={supabaseConfigured} notice={authNotice} onDemo={() => { setAuthNotice(""); setDemoMode(true); }} />;
+  if (!session && !demoMode) {
+    return (
+      <AuthGate
+        configured={supabaseConfigured}
+        notice={authNotice}
+        showDemoAccess={demoAccessEnabled}
+        onDemo={() => {
+          if (!demoAccessEnabled) return;
+          setAuthNotice("");
+          setDemoMode(true);
+        }}
+      />
+    );
+  }
   if (passwordSetup && !demoMode) return <PasswordSetupGate onDone={() => setPasswordSetup(false)} />;
 
   return <FinanceApp session={demoMode ? DEMO_SESSION : session ?? DEMO_SESSION} demoMode={demoMode} theme={theme} setTheme={setTheme} onSignOut={handleSignOut} />;
@@ -1017,7 +1031,19 @@ function PreloadGate() {
   );
 }
 
-function AuthGate({ checking = false, configured, notice = "", onDemo }: { checking?: boolean; configured: boolean; notice?: string; onDemo: () => void }) {
+function AuthGate({
+  checking = false,
+  configured,
+  notice = "",
+  showDemoAccess = false,
+  onDemo
+}: {
+  checking?: boolean;
+  configured: boolean;
+  notice?: string;
+  showDemoAccess?: boolean;
+  onDemo: () => void;
+}) {
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -1166,9 +1192,11 @@ function AuthGate({ checking = false, configured, notice = "", onDemo }: { check
             <button className="filled-button" type="submit" disabled={submitting}>
               {submitting ? "Aguarde..." : mode === "reset" ? "Enviar e-mail" : mode === "sign-up" ? "Criar conta" : "Entrar"}
             </button>
-            <button className="tonal-button demo-access-button" type="button" onClick={onDemo}>
-              Modo demo
-            </button>
+            {showDemoAccess && (
+              <button className="tonal-button demo-access-button" type="button" onClick={onDemo}>
+                Modo demo
+              </button>
+            )}
             {mode === "reset" ? (
               <div className="auth-secondary-actions" aria-label="Acesso alternativo">
                 <button className="text-button" type="button" onClick={() => setMode("sign-in")}>
@@ -1410,6 +1438,14 @@ function productionDesktopGateMode(): "confirmation" | "landing" | null {
   if (!import.meta.env.PROD || typeof window === "undefined") return null;
   if (isMobileLikeDevice()) return null;
   return isAuthConfirmationUrl() ? "confirmation" : "landing";
+}
+
+function demoAccessMode(): boolean {
+  if (import.meta.env.DEV) return true;
+  if (typeof window === "undefined") return false;
+
+  const hostname = window.location.hostname.toLowerCase();
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
 }
 
 function isAuthConfirmationUrl(): boolean {
