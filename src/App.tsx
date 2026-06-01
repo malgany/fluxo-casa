@@ -38,7 +38,7 @@ type Sheet = "entry" | "balance" | null;
 type DashboardPeriod = "previous" | "current" | "next";
 type ThemeMode = "light-new" | "light" | "dark";
 type MaterialIconName = "wallet" | "update" | "export" | "import" | "add" | "lightMode" | "routine" | "darkMode";
-type UiIconName = "home" | "list" | "more" | "back" | "close" | "delete" | "edit" | "external" | "moon" | "sun" | "lock" | "users" | "info" | "warning" | "eye" | "eyeOff" | "user" | "chevronRight" | "briefcase" | "bank" | "crown" | "shield" | "plus";
+type UiIconName = "home" | "list" | "more" | "back" | "close" | "delete" | "edit" | "external" | "moon" | "sun" | "lock" | "users" | "info" | "warning" | "eye" | "eyeOff" | "user" | "chevronRight" | "briefcase" | "bank" | "crown" | "shield" | "plus" | "arrowUpBox" | "arrowDownBox" | "card" | "history" | "calendar";
 type AuthMode = "sign-in" | "sign-up" | "reset";
 type DialogTone = "info" | "error";
 type HouseholdScreen = { mode: "list" | "create" | "edit"; householdId?: string };
@@ -132,7 +132,12 @@ const UI_ICON_PATHS: Record<UiIconName, string[]> = {
   bank: ["M4 10h16", "M5 10l7-5 7 5", "M6 10v8", "M10 10v8", "M14 10v8", "M18 10v8", "M4 18h16"],
   crown: ["M5 16h14", "M6 16 5 8l5 4 2-6 2 6 5-4-1 8", "M7 20h10"],
   shield: ["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z", "m9 12 2 2 4-5"],
-  plus: ["M12 5v14", "M5 12h14"]
+  plus: ["M12 5v14", "M5 12h14"],
+  arrowUpBox: ["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z", "M12 17V8", "m8.5 11.5L12 8l3.5 3.5"],
+  arrowDownBox: ["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z", "M12 7v9", "m8.5 12.5L12 16l3.5-3.5"],
+  card: ["M4 7h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z", "M2 10h20", "M6 14h4"],
+  history: ["M3 12a9 9 0 1 0 3-6.7", "M3 4v5h5", "M12 7v5l3 2"],
+  calendar: ["M7 3v4", "M17 3v4", "M4 8h16", "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"]
 };
 
 function App() {
@@ -232,7 +237,7 @@ function FinanceApp({
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
   const [householdLoading, setHouseholdLoading] = useState(true);
   const [householdScreen, setHouseholdScreen] = useState<HouseholdScreen | null>(null);
-  const { activeNotification, dismissActiveNotification, notifications, readNextNotification, requestSync } = useHouseholdSync({
+  const { markNotificationRead, notifications, requestSync } = useHouseholdSync({
     householdId: selectedHouseholdId,
     demoMode
   });
@@ -683,10 +688,8 @@ function FinanceApp({
         <div className="app-actions">
           {insideSelectedHousehold && (
             <NotificationBell
-              count={notifications.length}
-              notification={activeNotification}
-              onDismiss={dismissActiveNotification}
-              onPress={readNextNotification}
+              notifications={notifications}
+              onMarkRead={markNotificationRead}
             />
           )}
           <button
@@ -1429,31 +1432,82 @@ function readInitialTheme(): ThemeMode {
 }
 
 function NotificationBell({
-  count,
-  notification,
-  onDismiss,
-  onPress
+  notifications,
+  onMarkRead
 }: {
-  count: number;
-  notification?: SyncNotification;
-  onDismiss: () => void;
-  onPress: () => void;
+  notifications: SyncNotification[];
+  onMarkRead: (notificationId: string) => void;
 }) {
-  const label = count > 0 ? `${count} ${count === 1 ? "nova atualização" : "novas atualizações"}` : "Sem novas atualizações";
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const panelId = useId();
+  const count = notifications.length;
+  const label = count > 0 ? `${count} ${count === 1 ? "nova atualizacao" : "novas atualizacoes"}` : "Sem novas atualizacoes";
+  const bellClassName = ["notification-bell", count > 0 ? "has-items" : "", open ? "is-open" : ""].filter(Boolean).join(" ");
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function closeOnOutsidePress(event: MouseEvent) {
+      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", closeOnOutsidePress);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsidePress);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
 
   return (
-    <div className="notification-wrap">
-      <button className={count > 0 ? "notification-bell has-items" : "notification-bell"} type="button" onClick={onPress} aria-label={label} title={label}>
+    <div className="notification-wrap" ref={wrapRef}>
+      <button
+        className={bellClassName}
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-label={label}
+        aria-controls={open ? panelId : undefined}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={label}
+      >
         <BellIcon />
         {count > 0 && <span className="notification-badge">{count > 9 ? "9+" : count}</span>}
       </button>
-      {notification && (
-        <div className="notification-card" role="status">
-          <strong>{notificationTitle(notification)}</strong>
-          <span>{notificationDescription(notification)}</span>
-          <button type="button" onClick={onDismiss} aria-label="Fechar notificação">
-            OK
-          </button>
+      {open && (
+        <div className="notification-panel" id={panelId} role="dialog" aria-label="Atualizacoes recentes">
+          <div className="notification-panel-header">
+            <strong>Atualizacoes</strong>
+            <span>{count > 0 ? `${count} ${count === 1 ? "pendente" : "pendentes"}` : "Tudo lido"}</span>
+          </div>
+          {count > 0 ? (
+            <ul className="notification-list">
+              {notifications.map((notification) => (
+                <li className="notification-item" key={notification.id}>
+                  <div className="notification-copy">
+                    <strong>{notificationTitle(notification)}</strong>
+                    <span>{notificationDescription(notification)}</span>
+                  </div>
+                  <button
+                    className="notification-read-button"
+                    type="button"
+                    onClick={() => onMarkRead(notification.id)}
+                    aria-label="Marcar como lida"
+                    title="Marcar como lida"
+                  >
+                    <ReadCheckIcon />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="notification-empty">Sem novas atualizacoes.</p>
+          )}
         </div>
       )}
     </div>
@@ -1474,6 +1528,15 @@ function ConfirmationIcon() {
     <svg className="notification-svg" viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="12" r="8" />
       <path d="m8.5 12.2 2.2 2.2 4.8-5" />
+    </svg>
+  );
+}
+
+function ReadCheckIcon() {
+  return (
+    <svg className="notification-read-svg" viewBox="0 0 24 24" aria-hidden="true">
+      <path className="first-check" d="m5 12.3 3.2 3.2L15.5 8" />
+      <path className="second-check" d="m12.2 15.4 1.1 1.1L20.5 9" />
     </svg>
   );
 }
@@ -2172,10 +2235,12 @@ function EntrySheet({
       <form className="sheet-form" onSubmit={handleSubmit}>
         <div className="segmented">
           <button className={kind === "out" ? "active out" : ""} type="button" onClick={() => setKind("out")}>
-            Saída
+            <UiIcon name="arrowUpBox" />
+            <span>Saída</span>
           </button>
           <button className={kind === "in" ? "active in" : ""} type="button" onClick={() => setKind("in")}>
-            Entrada
+            <UiIcon name="arrowDownBox" />
+            <span>Entrada</span>
           </button>
         </div>
 
@@ -2186,7 +2251,8 @@ function EntrySheet({
             onClick={() => handleEntryModeChange("single")}
             disabled={editing}
           >
-            Avulso
+            <UiIcon name="card" />
+            <span>Avulso</span>
           </button>
           <button
             className={entryMode === "recurring" ? "active" : ""}
@@ -2194,7 +2260,8 @@ function EntrySheet({
             onClick={() => handleEntryModeChange("recurring")}
             disabled={editing}
           >
-            Recorrente
+            <UiIcon name="history" />
+            <span>Recorrente</span>
           </button>
           <button
             className={entryMode === "installment" ? "active" : ""}
@@ -2202,45 +2269,10 @@ function EntrySheet({
             onClick={() => handleEntryModeChange("installment")}
             disabled={editing}
           >
-            Parcelado
+            <UiIcon name="calendar" />
+            <span>Parcelado</span>
           </button>
         </div>
-
-        <label className="title-field">
-          Título
-          <span className={selectedIcon ? "title-input-shell has-selected-icon" : "title-input-shell"}>
-            <input
-              value={selectedIcon ? "" : title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder={selectedIcon ? "" : "Salário, farmácia, iFood"}
-              readOnly={Boolean(selectedIcon)}
-              required={!selectedIcon}
-              autoFocus
-            />
-            {selectedIcon && (
-              <span className="selected-icon-chip">
-                <ServiceIconImage icon={selectedIcon} />
-                <span>{selectedIcon.label}</span>
-                <button type="button" onClick={() => setSelectedIconId(undefined)} aria-label="Remover ícone">
-                  ×
-                </button>
-              </span>
-            )}
-          </span>
-        </label>
-
-        {iconSuggestions.length > 0 && (
-          <div className="icon-picker" aria-label="Sugestões de ícone">
-            <div className="icon-suggestions">
-              {iconSuggestions.map((icon) => (
-                <button key={icon.id} type="button" onClick={() => setSelectedIconId(icon.id)}>
-                  <ServiceIconImage icon={icon} />
-                  <span>{icon.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {entryMode === "installment" ? (
           <>
@@ -2258,6 +2290,7 @@ function EntrySheet({
                     inputMode="decimal"
                     placeholder="0,00"
                     autoComplete="off"
+                    autoFocus
                     required
                   />
                 </span>
@@ -2293,10 +2326,46 @@ function EntrySheet({
                 inputMode="decimal"
                 placeholder="0,00"
                 autoComplete="off"
+                autoFocus
                 required
               />
             </span>
           </label>
+        )}
+
+        <label className="title-field">
+          Título
+          <span className={selectedIcon ? "title-input-shell has-selected-icon" : "title-input-shell"}>
+            <input
+              value={selectedIcon ? "" : title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder={selectedIcon ? "" : "Salário, farmácia, iFood"}
+              readOnly={Boolean(selectedIcon)}
+              required={!selectedIcon}
+            />
+            {selectedIcon && (
+              <span className="selected-icon-chip">
+                <ServiceIconImage icon={selectedIcon} />
+                <span>{selectedIcon.label}</span>
+                <button type="button" onClick={() => setSelectedIconId(undefined)} aria-label="Remover ícone">
+                  ×
+                </button>
+              </span>
+            )}
+          </span>
+        </label>
+
+        {iconSuggestions.length > 0 && (
+          <div className="icon-picker" aria-label="Sugestões de ícone">
+            <div className="icon-suggestions">
+              {iconSuggestions.map((icon) => (
+                <button key={icon.id} type="button" onClick={() => setSelectedIconId(icon.id)}>
+                  <ServiceIconImage icon={icon} />
+                  <span>{icon.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         <label>
           {entryMode === "installment" ? "Primeira parcela" : "Data"}

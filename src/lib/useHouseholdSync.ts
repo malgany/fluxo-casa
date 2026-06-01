@@ -8,12 +8,10 @@ export const MUTATION_SYNC_DEBOUNCE_MS = 1200;
 export const VISIBLE_SYNC_INTERVAL_MS = 2 * 60 * 1000;
 
 export interface UseHouseholdSyncResult extends SyncSnapshot {
-  activeNotification?: SyncNotification;
   notifications: SyncNotification[];
   requestSync: (options: SyncRequestOptions) => void;
   revealSyncHint: (text?: string) => void;
-  dismissActiveNotification: () => void;
-  readNextNotification: () => void;
+  markNotificationRead: (notificationId: string) => void;
 }
 
 export function useHouseholdSync({ householdId, demoMode }: { householdId: string; demoMode: boolean }): UseHouseholdSyncResult {
@@ -23,7 +21,6 @@ export function useHouseholdSync({ householdId, demoMode }: { householdId: strin
   const schedulerRef = useRef<HouseholdSyncScheduler | null>(null);
   const [snapshot, setSnapshot] = useState<SyncSnapshot>(initialSyncSnapshot);
   const [notifications, setNotifications] = useState<SyncNotification[]>(() => loadNotifications(householdId));
-  const [activeNotification, setActiveNotification] = useState<SyncNotification | undefined>();
 
   householdIdRef.current = householdId;
   demoModeRef.current = demoMode;
@@ -54,25 +51,17 @@ export function useHouseholdSync({ householdId, demoMode }: { householdId: strin
     schedulerRef.current?.revealHint(text);
   }, []);
 
-  const readNextNotification = useCallback(() => {
+  const markNotificationRead = useCallback((notificationId: string) => {
     const currentHouseholdId = householdIdRef.current;
     if (!currentHouseholdId) return;
 
     setNotifications((current) => {
-      const [next, ...remaining] = current;
-      if (!next) {
-        setActiveNotification(undefined);
-        return current;
-      }
+      const remaining = current.filter((notification) => notification.id !== notificationId);
+      if (remaining.length === current.length) return current;
 
-      setActiveNotification(next);
-      saveNotifications(currentHouseholdId, remaining);
+      if (!demoModeRef.current) saveNotifications(currentHouseholdId, remaining);
       return remaining;
     });
-  }, []);
-
-  const dismissActiveNotification = useCallback(() => {
-    setActiveNotification(undefined);
   }, []);
 
   useEffect(() => {
@@ -80,9 +69,8 @@ export function useHouseholdSync({ householdId, demoMode }: { householdId: strin
   }, []);
 
   useEffect(() => {
-    setNotifications(loadNotifications(householdId));
-    setActiveNotification(undefined);
-  }, [householdId]);
+    setNotifications(demoMode && householdId ? demoNotifications(householdId) : loadNotifications(householdId));
+  }, [demoMode, householdId]);
 
   useEffect(() => {
     if (!snapshot.hintVisible) return undefined;
@@ -121,10 +109,8 @@ export function useHouseholdSync({ householdId, demoMode }: { householdId: strin
 
   return {
     ...snapshot,
-    activeNotification,
-    dismissActiveNotification,
+    markNotificationRead,
     notifications,
-    readNextNotification,
     requestSync,
     revealSyncHint
   };
@@ -161,6 +147,44 @@ function mergeNotifications(current: SyncNotification[], incoming: SyncNotificat
     if (!byId.has(notification.id)) byId.set(notification.id, notification);
   }
   return Array.from(byId.values()).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, maxStoredNotifications);
+}
+
+function demoNotifications(householdId: string): SyncNotification[] {
+  return [
+    {
+      id: `${householdId}:demo-notification-1`,
+      householdId,
+      action: "created",
+      collection: "entries",
+      title: "Mercado",
+      amount: 286.4,
+      flowKind: "out",
+      date: "2026-06-01",
+      occurredAt: "2026-06-01T12:00:00.000Z"
+    },
+    {
+      id: `${householdId}:demo-notification-2`,
+      householdId,
+      action: "created",
+      collection: "recurrences",
+      title: "Internet",
+      amount: 119.9,
+      flowKind: "out",
+      date: "2026-06-02",
+      occurredAt: "2026-06-01T11:45:00.000Z"
+    },
+    {
+      id: `${householdId}:demo-notification-3`,
+      householdId,
+      action: "deleted",
+      collection: "entries",
+      title: "Freelance",
+      amount: 750,
+      flowKind: "in",
+      date: "2026-06-03",
+      occurredAt: "2026-06-01T11:30:00.000Z"
+    }
+  ];
 }
 
 function isSyncNotification(value: unknown): value is SyncNotification {

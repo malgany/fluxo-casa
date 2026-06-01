@@ -3,6 +3,17 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
+      "package_name": "br.com.fluxocasa",
+      "sha256_cert_fingerprints": [
+        "80:0B:19:01:2C:80:2F:FF:82:D9:C0:D4:60:EC:29:0F:9B:E6:FE:0E:F0:AF:AC:1D:E1:C9:A9:D8:41:34:DA:32",
+        "CC:83:57:AC:92:29:BE:5D:55:9E:D3:69:81:C3:41:BC:FF:1E:F7:C0:FA:49:6B:3C:03:7B:78:27:AD:AA:85:89"
+      ]
+    }
+  },
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
       "package_name": "com.malgany.fluxocasa",
       "sha256_cert_fingerprints": [
         "80:0B:19:01:2C:80:2F:FF:82:D9:C0:D4:60:EC:29:0F:9B:E6:FE:0E:F0:AF:AC:1D:E1:C9:A9:D8:41:34:DA:32",

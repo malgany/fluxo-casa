@@ -1,5 +1,5 @@
 {
-  "packageId": "com.malgany.fluxocasaapp",
+  "packageId": "br.com.fluxocasa",
   "host": "fluxo-casa-phi.vercel.app",
   "name": "Fluxo Casa",
   "launcherName": "Fluxo Casa",
@@ -20,8 +20,8 @@
     "path": "C:\\Users\\Tony\\.android-keystores\\fluxo-casa-upload.jks",
     "alias": "fluxocasa"
   },
-  "appVersionName": "1.0.0",
-  "appVersionCode": 1,
+  "appVersionName": "1.0.1",
+  "appVersionCode": 2,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://fluxo-casa-phi.vercel.app/manifest.webmanifest",
@@ -36,12 +36,15 @@
   "fullScopeUrl": "https://fluxo-casa-phi.vercel.app/",
   "minSdkVersion": 21,
   "orientation": "portrait",
-  "fingerprints": [],
+  "fingerprints": [
+    "80:0B:19:01:2C:80:2F:FF:82:D9:C0:D4:60:EC:29:0F:9B:E6:FE:0E:F0:AF:AC:1D:E1:C9:A9:D8:41:34:DA:32",
+    "CC:83:57:AC:92:29:BE:5D:55:9E:D3:69:81:C3:41:BC:FF:1E:F7:C0:FA:49:6B:3C:03:7B:78:27:AD:AA:85:89"
+  ],
   "additionalTrustedOrigins": [],
   "retainedBundles": [],
   "protocolHandlers": [],
   "fileHandlers": [],
   "launchHandlerClientMode": "",
   "displayOverride": [],
-  "appVersion": "1.0.0"
+  "appVersion": "1.0.1"
 }
