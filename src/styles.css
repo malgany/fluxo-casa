@@ -372,6 +372,45 @@ textarea {
   gap: 18px;
 }
 
+.preload-screen {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  overflow: hidden;
+  padding: 24px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #14072f 22%, transparent), color-mix(in srgb, #080317 26%, transparent)),
+    url("/splash-preload.svg") center / cover no-repeat,
+    #160735;
+  color: #ffffff;
+}
+
+.preload-brand {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  transform: translateY(-4vh);
+}
+
+.preload-brand img {
+  width: clamp(104px, 28vw, 148px);
+  height: clamp(104px, 28vw, 148px);
+  border-radius: 28px;
+  box-shadow:
+    0 24px 70px color-mix(in srgb, #000000 42%, transparent),
+    0 0 46px color-mix(in srgb, #d8b4ff 42%, transparent);
+}
+
+.preload-brand h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(1.55rem, 8vw, 2.25rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0;
+  text-shadow: 0 2px 24px color-mix(in srgb, #000000 45%, transparent);
+}
+
 .access-mark {
   display: grid;
   width: 56px;

@@ -5,6 +5,7 @@ const APP_SHELL = [
   "/index.html",
   "/manifest.webmanifest",
   "/icon.svg",
+  "/splash-preload.svg",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/maskable-512.png",

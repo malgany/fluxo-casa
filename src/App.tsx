@@ -198,7 +198,7 @@ function App() {
   if (productionDesktopGate === "confirmation") return <DesktopConfirmationPage />;
   if (productionDesktopGate === "landing") return <DesktopLandingPage />;
 
-  if (checkingSession) return <AuthGate checking configured={supabaseConfigured} notice={authNotice} onDemo={() => setDemoMode(true)} />;
+  if (checkingSession) return <PreloadGate />;
   if (!session && !demoMode) return <AuthGate configured={supabaseConfigured} notice={authNotice} onDemo={() => { setAuthNotice(""); setDemoMode(true); }} />;
   if (passwordSetup && !demoMode) return <PasswordSetupGate onDone={() => setPasswordSetup(false)} />;
 
@@ -1001,6 +1001,17 @@ function demoEntry(id: string, kind: FlowKind, title: string, amount: number, da
     updatedAt: now,
     syncStatus: "synced"
   };
+}
+
+function PreloadGate() {
+  return (
+    <main className="preload-screen" aria-label="Carregando Fluxo Casa" aria-busy="true">
+      <div className="preload-brand">
+        <img src="/icon.svg" alt="" aria-hidden="true" />
+        <h1>Fluxo Casa</h1>
+      </div>
+    </main>
+  );
 }
 
 function AuthGate({ checking = false, configured, notice = "", onDemo }: { checking?: boolean; configured: boolean; notice?: string; onDemo: () => void }) {

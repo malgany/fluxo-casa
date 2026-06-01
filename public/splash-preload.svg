@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 945 2048" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="top-glow" cx="76%" cy="7%" r="76%">
+      <stop offset="0" stop-color="#7d2df2"/>
+      <stop offset="0.42" stop-color="#341173"/>
+      <stop offset="1" stop-color="#110734"/>
+    </radialGradient>
+    <radialGradient id="bottom-glow" cx="82%" cy="76%" r="62%">
+      <stop offset="0" stop-color="#8c35ff"/>
+      <stop offset="0.22" stop-color="#4813a0"/>
+      <stop offset="1" stop-color="#120633" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8c4dff" stop-opacity="0.1"/>
+      <stop offset="0.58" stop-color="#a866ff"/>
+      <stop offset="1" stop-color="#f4dcff"/>
+    </linearGradient>
+    <filter id="soft-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="945" height="2048" fill="url(#top-glow)"/>
+  <rect width="945" height="2048" fill="url(#bottom-glow)"/>
+  <path d="M594 430 735 314c22-18 53-18 75 0l198 162v235c0 88 50 154 125 179" fill="none" stroke="url(#line)" stroke-width="4" opacity="0.78" filter="url(#soft-glow)"/>
+  <path d="M594 430v449c0 110-53 195-148 248-80 44-189 66-302 46-105-19-207-84-272-176" fill="none" stroke="#7b45ee" stroke-width="4" opacity="0.4" filter="url(#soft-glow)"/>
+  <path d="M-28 1265c92 315 375 383 670 133 115-97 144-232 242-304 86-63 219-47 304-1" fill="none" stroke="#a765ff" stroke-width="4" opacity="0.95" filter="url(#soft-glow)"/>
+  <path d="M408 1774c159-132 403-111 388-228-12-89-178-97-214-138-41-47 40-88 190-93 162-6 276 71 334 158" fill="none" stroke="#8d45ff" stroke-width="3" opacity="0.64" filter="url(#soft-glow)"/>
+  <path d="M495 1512c144-41 279-76 382-202 90-110 117-270 254-309" fill="none" stroke="#5a24bf" stroke-width="3" opacity="0.46"/>
+  <circle cx="710" cy="1342" r="3" fill="#fff" filter="url(#soft-glow)"/>
+  <circle cx="557" cy="1495" r="3" fill="#fff" filter="url(#soft-glow)"/>
+  <circle cx="477" cy="1582" r="2.5" fill="#fff" filter="url(#soft-glow)"/>
+  <circle cx="802" cy="1399" r="2" fill="#fff" filter="url(#soft-glow)"/>
+</svg>
