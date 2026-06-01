@@ -20,6 +20,18 @@ plugins {
     id 'com.android.application'
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+
+def releaseSigningStoreFile = localProperties.getProperty('fluxoUploadStoreFile') ?: System.getenv('FLUXO_UPLOAD_STORE_FILE')
+def releaseSigningStorePassword = localProperties.getProperty('fluxoUploadStorePassword') ?: System.getenv('FLUXO_UPLOAD_STORE_PASSWORD')
+def releaseSigningKeyAlias = localProperties.getProperty('fluxoUploadKeyAlias') ?: System.getenv('FLUXO_UPLOAD_KEY_ALIAS')
+def releaseSigningKeyPassword = localProperties.getProperty('fluxoUploadKeyPassword') ?: System.getenv('FLUXO_UPLOAD_KEY_PASSWORD')
+def hasReleaseSigning = releaseSigningStoreFile && releaseSigningStorePassword && releaseSigningKeyAlias && releaseSigningKeyPassword
+
 def twaManifest = [
     applicationId: 'com.malgany.fluxocasaapp',
     hostName: 'fluxo-casa-phi.vercel.app', // The domain being opened in the TWA.
@@ -54,6 +66,16 @@ def twaManifest = [
 android {
     compileSdkVersion 36
     namespace "com.malgany.fluxocasaapp"
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseSigningStoreFile)
+                storePassword releaseSigningStorePassword
+                keyAlias releaseSigningKeyAlias
+                keyPassword releaseSigningKeyPassword
+            }
+        }
+    }
     defaultConfig {
         applicationId "com.malgany.fluxocasaapp"
         minSdkVersion 21
@@ -155,6 +177,9 @@ android {
     buildTypes {
         release {
             minifyEnabled true
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     compileOptions {
