@@ -1,4 +1,4 @@
-package br.com.fluxocasa;
+package com.malgany.fluxocasaapp;
 
 
 

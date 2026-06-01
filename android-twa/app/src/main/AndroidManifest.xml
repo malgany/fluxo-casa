@@ -25,7 +25,7 @@
 
 
     <application
-        android:name="br.com.fluxocasa.Application"
+        android:name="com.malgany.fluxocasaapp.Application"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/appName"
@@ -68,7 +68,7 @@
             </activity>
 
 
-        <activity android:name="br.com.fluxocasa.LauncherActivity"
+        <activity android:name="com.malgany.fluxocasaapp.LauncherActivity"
             android:alwaysRetainTaskState="true"
             android:label="@string/launcherName"
             android:exported="true">
@@ -170,7 +170,7 @@
         </provider>
 
         <service
-            android:name="br.com.fluxocasa.DelegationService"
+            android:name="com.malgany.fluxocasaapp.DelegationService"
             android:enabled="@bool/enableNotification"
             android:exported="@bool/enableNotification">
 

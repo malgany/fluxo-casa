@@ -60,7 +60,7 @@ type DemoHouseholdContext = {
 const APP_UPDATE_CHECK_PARAM = "app-update-check";
 const APP_UPDATE_RELOAD_DELAY_MS = 700;
 const DEMO_LOADING_DELAY_MS = 3000;
-const ANDROID_DOWNLOAD_URL = "https://play.google.com/store/apps/details?id=br.com.fluxocasa";
+const ANDROID_DOWNLOAD_URL = "https://play.google.com/store/apps/details?id=com.malgany.fluxocasaapp";
 const PERMISSION_SIGN_OUT_MESSAGE = "Sua sessão perdeu permissão para esta conta. Entre novamente.";
 const THEME_STORAGE_KEY = "fluxo-casa-theme";
 const DEMO_USER_ID = "demo-user";

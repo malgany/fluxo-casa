@@ -21,7 +21,7 @@ plugins {
 }
 
 def twaManifest = [
-    applicationId: 'br.com.fluxocasa',
+    applicationId: 'com.malgany.fluxocasaapp',
     hostName: 'fluxo-casa-phi.vercel.app', // The domain being opened in the TWA.
     launchUrl: '/', // The start path for the TWA. Must be relative to the domain.
     name: 'Fluxo Casa', // The application name.
@@ -53,9 +53,9 @@ def twaManifest = [
 
 android {
     compileSdkVersion 36
-    namespace "br.com.fluxocasa"
+    namespace "com.malgany.fluxocasaapp"
     defaultConfig {
-        applicationId "br.com.fluxocasa"
+        applicationId "com.malgany.fluxocasaapp"
         minSdkVersion 21
         targetSdkVersion 35
         versionCode 3
